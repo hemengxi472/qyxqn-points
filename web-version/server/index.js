@@ -24,7 +24,10 @@ app.use('/api/points', require('./routes/points'));
 app.use('/api/admin', require('./routes/admin'));
 
 // Serve frontend static files in production
-const clientDist = path.join(__dirname, '..', 'client', 'dist');
+let clientDist = path.join(__dirname, 'client', 'dist');       // Docker
+if (!require('fs').existsSync(path.join(clientDist, 'index.html'))) {
+  clientDist = path.join(__dirname, '..', 'client', 'dist');   // Local dev
+}
 app.use(express.static(clientDist));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
