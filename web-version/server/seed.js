@@ -1,7 +1,6 @@
-const { db, initDB } = require('./db');
 const bcrypt = require('bcryptjs');
 
-initDB();
+function seed(db) {
 
 const MODULES = [
   {
@@ -118,4 +117,14 @@ if (existingAdmin.cnt === 0) {
 }
 
 console.log('数据库初始化完成');
-process.exit(0);
+}
+
+// Run directly if called as script
+if (require.main === module) {
+  const { db, initDB } = require('./db');
+  initDB();
+  seed(db);
+  process.exit(0);
+}
+
+module.exports = { seed };
