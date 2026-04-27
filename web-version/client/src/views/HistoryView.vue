@@ -127,4 +127,16 @@ function loadMore() { loadData() }
 .load-wrap { text-align: center; margin-top: 24px; }
 .load-btn { min-width: 160px; border-radius: 16px; height: 46px; font-weight: 600; }
 .end-text { text-align: center; color: var(--text-placeholder); font-size: 13px; margin-top: 20px; font-weight: 500; }
+
+@media (max-width: 768px) {
+  .log-item { padding: 14px 16px; }
+  .log-icon { width: 32px; height: 32px; }
+  .log-icon span { font-size: 14px; }
+  .log-body { min-width: 0; }
+  .log-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log-meta { font-size: 11px; }
+  .log-points { font-size: 15px; }
+  .log-desc { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .load-btn { min-width: 140px; height: 42px; }
+}
 </style>

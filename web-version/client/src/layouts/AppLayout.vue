@@ -1,14 +1,24 @@
 <template>
   <div class="app-layout">
+    <!-- 移动端遮罩 -->
+    <div v-if="mobileOpen" class="mobile-overlay" @click="mobileOpen = false" />
+
     <el-container>
-      <!-- 侧边栏 — 糖果软萌主题 -->
-      <el-aside :width="isCollapse ? '64px' : '230px'" class="aside">
+      <!-- 侧边栏 -->
+      <el-aside :width="isCollapse ? '64px' : '230px'" class="aside" :class="{ 'aside-mobile-open': mobileOpen }">
+        <!-- 移动端关闭按钮 -->
+        <button class="aside-close-btn" @click="mobileOpen = false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
         <!-- 品牌 Logo -->
-        <div class="aside-brand" @click="$router.push(auth.isAdmin ? '/admin/stats' : '/dashboard')">
+        <div class="aside-brand" @click="$router.push(auth.isAdmin ? '/admin/stats' : '/dashboard'); mobileOpen = false">
           <div class="brand-mark">
             <span class="mark-char">青</span>
           </div>
-          <div v-show="!isCollapse" class="brand-text-wrap">
+          <div v-show="!isCollapse || isMobile" class="brand-text-wrap">
             <span class="brand-title">青羊新青年</span>
             <span class="brand-sub">能力积分系统</span>
           </div>
@@ -18,78 +28,64 @@
         <el-menu
           :default-active="activeMenu"
           router
-          :collapse="isCollapse"
+          :collapse="isCollapse && !isMobile"
           background-color="transparent"
           text-color="#8D7C80"
           active-text-color="#FF7B8A"
+          @select="mobileOpen = false"
         >
-          <!-- 员工菜单：仅非管理员 -->
+          <!-- 员工菜单 -->
           <template v-if="!auth.isAdmin">
             <el-menu-item index="/dashboard">
-              <span class="menu-emoji">🏠</span>
-              <span>工作台</span>
+              <span class="menu-emoji">🏠</span><span>工作台</span>
             </el-menu-item>
             <el-menu-item index="/modules">
-              <span class="menu-emoji">🌟</span>
-              <span>积分申请</span>
+              <span class="menu-emoji">🌟</span><span>积分申请</span>
             </el-menu-item>
             <el-menu-item index="/history">
-              <span class="menu-emoji">📋</span>
-              <span>积分记录</span>
+              <span class="menu-emoji">📋</span><span>积分记录</span>
             </el-menu-item>
             <el-menu-item index="/group">
-              <span class="menu-emoji">🤝</span>
-              <span>团队任务</span>
+              <span class="menu-emoji">🤝</span><span>团队任务</span>
             </el-menu-item>
           </template>
 
-          <!-- 管理菜单：仅管理员 -->
+          <!-- 管理菜单 -->
           <template v-if="auth.isAdmin">
-            <el-menu-item index="/admin/stats">
-              <span class="menu-emoji">🏠</span>
-              <span>管理首页</span>
-            </el-menu-item>
             <el-menu-item index="/admin/review">
-              <span class="menu-emoji">✅</span>
-              <span>审核管理</span>
+              <span class="menu-emoji">✅</span><span>审核管理</span>
             </el-menu-item>
             <el-menu-item index="/admin/registrations">
-              <span class="menu-emoji">📝</span>
-              <span>注册审批</span>
+              <span class="menu-emoji">📝</span><span>注册审批</span>
             </el-menu-item>
             <el-menu-item index="/admin/stats">
-              <span class="menu-emoji">📊</span>
-              <span>数据统计</span>
+              <span class="menu-emoji">📊</span><span>数据统计</span>
             </el-menu-item>
             <el-menu-item index="/admin/employees">
-              <span class="menu-emoji">👤</span>
-              <span>员工管理</span>
+              <span class="menu-emoji">👤</span><span>员工管理</span>
             </el-menu-item>
             <el-menu-item index="/admin/groups">
-              <span class="menu-emoji">🏢</span>
-              <span>团队管理</span>
+              <span class="menu-emoji">🏢</span><span>团队管理</span>
             </el-menu-item>
             <el-menu-item index="/admin/modules">
-              <span class="menu-emoji">🛠️</span>
-              <span>模块管理</span>
+              <span class="menu-emoji">🛠️</span><span>模块管理</span>
             </el-menu-item>
             <el-menu-item index="/admin/fraud">
-              <span class="menu-emoji">⚠️</span>
-              <span>作假管理</span>
+              <span class="menu-emoji">⚠️</span><span>作假管理</span>
             </el-menu-item>
           </template>
         </el-menu>
 
         <!-- 底部用户区 -->
-        <div class="aside-user" @click="$router.push(auth.isAdmin ? '/admin/stats' : '/profile')">
+        <div class="aside-user" @click="$router.push(auth.isAdmin ? '/admin/stats' : '/profile'); mobileOpen = false">
           <el-avatar :size="40" class="user-avatar" :src="auth.user?.avatarUrl || undefined">
             {{ auth.user?.avatarUrl ? '' : auth.user?.name?.charAt(0) }}
           </el-avatar>
-          <div v-show="!isCollapse" class="user-info">
+          <div v-show="!isCollapse || isMobile" class="user-info">
             <div class="user-name">{{ auth.user?.name }}</div>
             <div class="user-dept">{{ auth.user?.department }}</div>
           </div>
-          <div v-show="!isCollapse" class="user-arrow">
+          <div v-show="!isCollapse && !isMobile" class="user-arrow">
             <el-icon><ArrowRight /></el-icon>
           </div>
         </div>
@@ -99,22 +95,22 @@
       <el-container>
         <el-header class="header">
           <div class="header-left">
-            <button class="collapse-btn" @click="isCollapse = !isCollapse">
+            <button class="collapse-btn" @click="toggleSidebar">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <line x1="3" y1="12" x2="15" y2="12" />
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <div class="header-divider" />
+            <div class="header-divider hide-on-mobile" />
             <span class="header-title">{{ pageTitle }}</span>
           </div>
           <div class="header-right">
-            <span v-if="auth.isAdmin" class="admin-badge">{{ auth.isSuperAdmin ? '超管' : '管理员' }}</span>
+            <span v-if="auth.isAdmin" class="admin-badge hide-on-mobile">{{ auth.isSuperAdmin ? '超管' : '管理员' }}</span>
             <el-avatar :size="36" class="header-avatar" :src="auth.user?.avatarUrl || undefined">
               {{ auth.user?.avatarUrl ? '' : auth.user?.name?.charAt(0) }}
             </el-avatar>
-            <span class="header-user-name">{{ auth.user?.name }}</span>
+            <span class="header-user-name hide-on-mobile">{{ auth.user?.name }}</span>
             <button class="logout-btn" @click="auth.logout(); $router.push('/login')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
@@ -133,7 +129,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
@@ -141,11 +137,32 @@ import { useAuthStore } from '../stores/auth'
 const auth = useAuthStore()
 const route = useRoute()
 const isCollapse = ref(false)
+const isMobile = ref(false)
+const mobileOpen = ref(false)
+
+function checkMobile() {
+  isMobile.value = window.innerWidth < 768
+  if (!isMobile.value) mobileOpen.value = false
+}
+
+function toggleSidebar() {
+  if (isMobile.value) {
+    mobileOpen.value = !mobileOpen.value
+  } else {
+    isCollapse.value = !isCollapse.value
+  }
+}
 
 onMounted(async () => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
   if (auth.token && !auth.user) {
     await auth.fetchUser()
   }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobile)
 })
 
 const activeMenu = computed(() => route.path)
@@ -346,7 +363,69 @@ const pageTitle = computed(() => route.meta.title || '工作台')
   min-height: calc(100vh - var(--header-height));
   overflow-y: auto;
 }
+/* ===== 移动端适配 ===== */
 @media (max-width: 768px) {
-  .main { padding: 16px; }
+  /* 侧边栏 — 固定 overlay */
+  .aside {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 2000;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 260px !important;
+    box-shadow: none;
+  }
+  .aside-mobile-open {
+    transform: translateX(0);
+    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.15);
+  }
+
+  /* overlay 遮罩 */
+  .mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 1999;
+    animation: fadeIn 0.25s ease-out;
+  }
+
+  /* 关闭按钮 */
+  .aside-close-btn {
+    display: flex;
+    position: absolute;
+    top: 18px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    z-index: 10;
+  }
+
+  /* header 精简 */
+  .header {
+    padding: 0 14px;
+  }
+  .header-title {
+    font-size: 15px;
+  }
+  .header-divider {
+    display: none;
+  }
+  .main {
+    padding: 16px;
+  }
+}
+
+/* 桌面端隐藏关闭按钮 */
+.aside-close-btn {
+  display: none;
 }
 </style>

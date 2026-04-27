@@ -283,4 +283,13 @@ async function toggleSub(sub) {
 .sc-limit { font-size: 11px; color: var(--accent-gold); }
 .sc-meta { font-size: 11px; color: var(--text-placeholder); }
 .sc-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+@media (max-width: 768px) {
+  .module-card { padding: 16px 18px; }
+  .mc-header { flex-wrap: wrap; gap: 10px; }
+  .mc-actions { width: 100%; justify-content: flex-end; }
+  .sub-card { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
+  .sc-info { flex: 1; min-width: 0; }
+  .sc-name { font-size: 13px; }
+}
 </style>

@@ -5,8 +5,8 @@
       <p class="page-sub">管理系统中的员工账号</p>
     </div>
 
-    <div class="table-card">
-      <el-table :data="employees" stripe border style="width:100%" v-loading="loading">
+    <div class="table-card table-scroll">
+      <el-table :data="employees" stripe border style="min-width:750px" v-loading="loading">
         <el-table-column prop="name" label="姓名" width="100" />
         <el-table-column prop="employeeId" label="工号" width="120" />
         <el-table-column prop="department" label="部门" min-width="140" />

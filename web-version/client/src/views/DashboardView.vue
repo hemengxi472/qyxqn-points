@@ -503,4 +503,12 @@ function animateCount(from, to, duration) {
   .hero-points { font-size: 60px; }
   .welcome-title { font-size: 20px; }
 }
+@media (max-width: 480px) {
+  .module-grid { grid-template-columns: 1fr; }
+  .hero-card { padding: 28px 18px; }
+  .hero-points { font-size: 44px; }
+  .welcome-title { font-size: 17px; }
+  .welcome-banner { flex-wrap: wrap; gap: 10px; }
+  .group-card { padding: 16px 18px; }
+}
 </style>

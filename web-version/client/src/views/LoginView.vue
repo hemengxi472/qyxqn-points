@@ -420,7 +420,7 @@ async function handleRegister() {
   .brand-motto { font-size: 12px; }
   .brand-footer { display: none; }
   .form-panel { padding: 20px 0; }
-  .form-card { width: 360px; }
+  .form-card { width: 360px; max-width: calc(100vw - 32px); min-width: 280px; }
   .form-header { margin-bottom: 24px; }
   .form-header h2 { font-size: 22px; }
 }

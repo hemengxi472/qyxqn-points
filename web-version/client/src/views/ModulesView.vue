@@ -168,4 +168,19 @@ const cardClass = (id) => ({ 1: 'card-ability', 2: 'card-responsibility', 3: 'ca
 }
 .module-card:hover .mc-arrow { color: var(--primary); transform: translateX(4px); }
 .module-card:hover .mc-action { color: var(--primary); }
+
+@media (max-width: 768px) {
+  .mc-body { padding: 22px 20px 0; }
+  .mc-icon-box { width: 48px; height: 48px; }
+  .mc-icon { font-size: 26px; }
+  .mc-name { font-size: 18px; }
+  .mc-badge { padding: 4px 12px; font-size: 11px; }
+  .mc-footer { padding: 14px 20px; }
+}
+@media (max-width: 480px) {
+  .mc-body { padding: 16px 14px 0; }
+  .mc-icon-box { width: 40px; height: 40px; }
+  .mc-icon { font-size: 22px; }
+  .mc-name { font-size: 16px; }
+}
 </style>

@@ -156,4 +156,13 @@ async function handleLogout() {
   border-radius: 16px;
   animation: fadeInUp 0.5s 0.15s var(--transition-bounce) both;
 }
+
+@media (max-width: 768px) {
+  .profile { padding: 0 8px; }
+  .hero-card { padding: 28px 18px 24px; }
+  .hero-name { font-size: 22px; }
+  .hero-dept { font-size: 13px; }
+  .info-row { padding: 14px 16px; }
+  .logout-btn { height: 46px; font-size: 14px; }
+}
 </style>

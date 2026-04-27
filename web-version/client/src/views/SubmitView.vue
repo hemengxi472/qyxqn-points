@@ -188,7 +188,7 @@ async function handleSubmit() {
 
 @media (max-width: 768px) {
   .content-grid { grid-template-columns: 1fr; }
-  .tip-card { display: none; }
+  .tip-card { margin-top: 16px; }
   .summary-bar { flex-direction: column; align-items: flex-start; gap: 10px; }
   .s-divider { width: 100%; height: 1.5px; }
 }

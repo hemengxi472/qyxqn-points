@@ -285,4 +285,13 @@ async function showDetail(g) {
 
 .review-actions { display: flex; gap: 14px; margin-top: 24px; }
 .action-btn { flex: 1; height: 48px; font-size: 15px; font-weight: 600; border-radius: var(--radius-md); }
+
+@media (max-width: 768px) {
+  .page-header { flex-wrap: wrap; gap: 10px; }
+  .group-card { padding: 14px 16px; gap: 10px; }
+  .photo-thumb { width: 64px; height: 64px; }
+  .action-btn { height: 44px; font-size: 14px; }
+  .monthly-task-card { padding: 18px; }
+  .review-actions { flex-direction: column; gap: 10px; }
+}
 </style>

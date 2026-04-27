@@ -242,4 +242,15 @@ async function handleSubmit() {
 .hi-submitted { background: var(--status-pending-bg); color: var(--status-pending); }
 .hi-approved { background: var(--status-approved-bg); color: var(--status-approved); }
 .hi-rejected { background: var(--status-rejected-bg); color: var(--status-rejected); }
+
+@media (max-width: 768px) {
+  .group-card { padding: 20px 16px; }
+  .g-name { font-size: 20px; }
+  .group-status-bar { padding: 12px 16px; }
+  .g-members { gap: 8px; }
+  .g-member { padding: 8px 12px; }
+  .submit-btn { height: 46px; font-size: 15px; }
+  .hist-item { padding: 12px 16px; gap: 10px; }
+  .hi-name { font-size: 13px; }
+}
 </style>

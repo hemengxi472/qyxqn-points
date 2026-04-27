@@ -150,4 +150,12 @@ function switchTab(tab) {
 
 .load-wrap { text-align: center; margin-top: 24px; }
 .load-btn { min-width: 160px; border-radius: var(--radius-md); height: 44px; }
+
+@media (max-width: 768px) {
+  .tab-btn { padding: 8px 14px; font-size: 12px; }
+  .review-card { padding: 14px 16px; gap: 10px; }
+  .rc-meta { font-size: 11px; }
+  .rc-arrow { font-size: 16px; }
+  .load-btn { min-width: 140px; height: 42px; }
+}
 </style>

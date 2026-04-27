@@ -150,4 +150,13 @@ function goSubmit(sub) {
 .empty-discipline h3 { font-size: 18px; color: var(--text-primary); margin-bottom: 12px; }
 .empty-discipline p { font-size: 14px; margin-bottom: 24px; max-width: 480px; margin-left: auto; margin-right: auto; line-height: 1.7; }
 .discipline-icon { font-size: 60px; margin-bottom: 16px; }
+
+@media (max-width: 768px) {
+  .sub-body { padding: 16px 18px; }
+  .sub-points { font-size: 26px; }
+  .sub-footer { padding: 10px 18px; }
+  .sub-name { font-size: 15px; }
+  .empty-discipline { padding: 40px 16px; }
+  .discipline-icon { font-size: 44px; }
+}
 </style>
