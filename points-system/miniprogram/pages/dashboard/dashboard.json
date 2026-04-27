@@ -1,0 +1,7 @@
+{
+  "usingComponents": {
+    "points-card": "../../components/points-card/points-card",
+    "empty-state": "../../components/empty-state/empty-state"
+  },
+  "navigationBarTitleText": "积分仪表盘"
+}

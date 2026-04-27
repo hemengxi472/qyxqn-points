@@ -1,0 +1,40 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/dashboard/dashboard",
+    "pages/modules/modules",
+    "pages/subcategories/subcategories",
+    "pages/submit/submit",
+    "pages/submission-detail/detail",
+    "pages/history/history",
+    "pages/profile/profile",
+    "pages/admin/review/review",
+    "pages/admin/review-detail/detail",
+    "pages/admin/stats/stats",
+    "pages/admin/employees/employees"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#1a73e8",
+    "navigationBarTitleText": "青年能力积分",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f5f5"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#999999",
+    "selectedColor": "#1a73e8",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/dashboard/dashboard", "text": "首页" },
+      { "pagePath": "pages/modules/modules", "text": "申请" },
+      { "pagePath": "pages/history/history", "text": "记录" },
+      { "pagePath": "pages/profile/profile", "text": "我的" },
+      { "pagePath": "pages/admin/review/review", "text": "审核" },
+      { "pagePath": "pages/admin/stats/stats", "text": "统计" },
+      { "pagePath": "pages/admin/employees/employees", "text": "管理" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

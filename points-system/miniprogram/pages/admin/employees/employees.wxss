@@ -1,0 +1,59 @@
+.emp-card {
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  display: flex;
+  align-items: center;
+}
+.emp-left {
+  flex: 1;
+}
+.emp-name {
+  font-size: 30rpx;
+  font-weight: 500;
+  display: block;
+}
+.emp-dept {
+  font-size: 24rpx;
+  color: var(--text-secondary);
+  display: block;
+  margin-top: 4rpx;
+}
+.emp-role {
+  font-size: 22rpx;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  display: inline-block;
+  margin-top: 6rpx;
+}
+.emp-right {
+  text-align: right;
+}
+.emp-points {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--primary);
+  display: block;
+}
+.emp-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 8rpx;
+  justify-content: flex-end;
+}
+.action-link {
+  font-size: 24rpx;
+  color: var(--primary);
+  padding: 4rpx 8rpx;
+}
+.action-link.danger {
+  color: var(--danger);
+}
+.loading-more {
+  text-align: center;
+  padding: 24rpx;
+  color: var(--text-hint);
+}

@@ -1,0 +1,60 @@
+<view class="container">
+  <view class="header-card">
+    <view class="flex-between mb-12">
+      <view>
+        <text class="greeting">{{userInfo.name}}，你好</text>
+        <text class="dept">{{userInfo.department}}</text>
+      </view>
+      <text class="employee-id">{{userInfo.employeeId}}</text>
+    </view>
+  </view>
+
+  <view class="total-card">
+    <text class="total-label">总积分</text>
+    <text class="total-points">{{totalPoints}}</text>
+    <view class="total-modules">
+      <text class="module-dot" wx:for="{{moduleBreakdown}}" wx:key="moduleId" wx:for-item="m">
+        {{m.icon}} {{m.points}}
+      </text>
+    </view>
+  </view>
+
+  <view class="section-title flex-between">
+    <text>各模块积分</text>
+    <text class="text-hint">共{{moduleBreakdown.length}}个模块</text>
+  </view>
+
+  <points-card
+    wx:for="{{moduleBreakdown}}"
+    wx:key="moduleId"
+    moduleName="{{item.moduleName}}"
+    icon="{{item.icon}}"
+    points="{{item.points}}"
+    highlight="{{item.points > 0}}"
+  />
+
+  <view wx:if="{{moduleBreakdown.length === 0 && !loading}}">
+    <empty-state text="暂无积分" subText="提交申请获得积分吧" />
+  </view>
+
+  <view class="section-title flex-between mt-24">
+    <text>最近积分变动</text>
+    <text class="text-hint" bindtap="goHistory">查看全部 →</text>
+  </view>
+
+  <view class="log-list" wx:if="{{recentLogs.length > 0}}">
+    <view class="log-item" wx:for="{{recentLogs}}" wx:key="_id">
+      <view class="log-left">
+        <text class="log-module">{{item.moduleName}}·{{item.subcategoryName}}</text>
+        <text class="log-date">{{item.createdAt}}</text>
+      </view>
+      <text class="log-points positive">+{{item.points}}</text>
+    </view>
+  </view>
+
+  <empty-state wx:if="{{recentLogs.length === 0 && !loading}}" text="暂无积分记录" />
+
+  <view class="mt-24 mb-20">
+    <button class="btn-primary" bindtap="goModules">立即申请积分</button>
+  </view>
+</view>

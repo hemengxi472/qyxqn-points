@@ -1,0 +1,7 @@
+<view class="points-card {{highlight ? 'highlight' : ''}}">
+  <text class="card-icon">{{icon}}</text>
+  <view class="card-info">
+    <text class="card-name">{{moduleName}}</text>
+    <text class="card-points">{{points}} 分</text>
+  </view>
+</view>

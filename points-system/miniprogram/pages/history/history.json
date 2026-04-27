@@ -1,0 +1,6 @@
+{
+  "usingComponents": {
+    "submission-item": "../../components/submission-item/submission-item",
+    "empty-state": "../../components/empty-state/empty-state"
+  }
+}

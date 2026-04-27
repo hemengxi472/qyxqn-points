@@ -1,0 +1,10 @@
+<view class="navbar" style="background:{{bgColor}}; padding-top:{{statusBarHeight}}px">
+  <view class="navbar-content">
+    <view class="navbar-left" wx:if="{{showBack}}">
+      <text class="back-icon" bindtap="onBack">←</text>
+    </view>
+    <view class="navbar-title">{{title}}</view>
+    <view class="navbar-right"></view>
+  </view>
+</view>
+<view style="height:{{44 + statusBarHeight}}px"></view>

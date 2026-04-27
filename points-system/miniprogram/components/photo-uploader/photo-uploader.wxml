@@ -1,0 +1,12 @@
+<view class="photo-grid">
+  <block wx:for="{{photos}}" wx:key="*this">
+    <view class="photo-item" data-index="{{index}}" bindtap="onPreview">
+      <image class="photo-img" src="{{item}}" mode="aspectFill" />
+      <view class="delete-btn" data-index="{{index}}" catchtap="onDelete">×</view>
+    </view>
+  </block>
+  <view class="photo-item add-btn" wx:if="{{photos.length < maxCount}}" bindtap="onAddPhoto">
+    <text class="add-icon">+</text>
+    <text class="add-text">{{uploading ? '上传中...' : '添加照片'}}</text>
+  </view>
+</view>

@@ -1,0 +1,9 @@
+<view class="tab-bar safe-bottom">
+  <view class="tab-item {{activeIndex === index ? 'active' : ''}}"
+    wx:for="{{tabs}}" wx:key="pagePath"
+    data-index="{{index}}" data-path="{{item.pagePath}}"
+    bindtap="onTabTap">
+    <text class="tab-icon">{{item.icon}}</text>
+    <text class="tab-text">{{item.text}}</text>
+  </view>
+</view>

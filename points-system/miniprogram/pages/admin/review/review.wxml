@@ -1,0 +1,17 @@
+<view class="container">
+  <view class="tab-bar">
+    <view class="tab-item {{currentTab === item.key ? 'active' : ''}}"
+      wx:for="{{tabs}}" wx:key="key" data-tab="{{item.key}}" bindtap="onTabChange">
+      {{item.label}}
+    </view>
+  </view>
+
+  <view class="list mt-20" wx:if="{{items.length > 0}}">
+    <view wx:for="{{items}}" wx:key="_id" data-id="{{item._id}}" bindtap="onTapItem">
+      <submission-item item="{{item}}" showEmployee="{{true}}" />
+    </view>
+  </view>
+
+  <empty-state wx:if="{{items.length === 0 && !loading}}" text="暂无数据" />
+  <view class="loading-more" wx:if="{{loading}}"><text>加载中...</text></view>
+</view>

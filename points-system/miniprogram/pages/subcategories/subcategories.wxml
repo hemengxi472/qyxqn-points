@@ -1,0 +1,24 @@
+<view class="container">
+  <view class="module-header">
+    <text class="current-module">{{moduleName}}</text>
+    <text class="sub-hint">请选择具体积分子项</text>
+  </view>
+
+  <view class="sub-list" wx:if="{{subcategories.length > 0}}">
+    <view class="sub-card" wx:for="{{subcategories}}" wx:key="name"
+          data-name="{{item.name}}" data-points="{{item.points}}" bindtap="onSelectSub">
+      <view class="sub-left">
+        <text class="sub-name">{{item.name}}</text>
+        <text class="sub-desc">{{item.description}}</text>
+        <text class="sub-limit" wx:if="{{item.maxTimes > 0}}">每年最多申请 {{item.maxTimes}} 次</text>
+      </view>
+      <view class="sub-right">
+        <text class="sub-points">+{{item.points}}</text>
+        <text class="sub-unit">分</text>
+        <text class="sub-arrow">→</text>
+      </view>
+    </view>
+  </view>
+
+  <empty-state wx:if="{{subcategories.length === 0 && !loading}}" text="暂无可用子项" />
+</view>

@@ -1,0 +1,27 @@
+{
+  "description": "青年员工能力积分系统",
+  "packOptions": { "ignore": [] },
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "preloadBackgroundData": false,
+    "minified": true,
+    "newFeature": true,
+    "autoAudits": false,
+    "coverView": true,
+    "showShadowRootInWxmlPanel": true,
+    "scopeDataCheck": false,
+    "checkInvalidKey": true,
+    "checkSiteMap": true,
+    "uploadWithSourceMap": true,
+    "compileHotReLoad": false
+  },
+  "compileType": "miniprogram",
+  "libVersion": "2.20.0",
+  "appid": "YOUR-APPID-HERE",
+  "projectname": "points-system",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "cloud": true
+}

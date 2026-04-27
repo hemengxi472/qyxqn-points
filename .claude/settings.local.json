@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash --version)",
+      "Read(//c/Program Files/Git/bin/**)",
+      "Read(//c/Program Files \\(x86\\)/Git/bin/**)",
+      "Bash(CLAUDE_PLUGIN_ROOT=\"/c/Users/14304/.claude/plugins/superpowers\" bash \"/c/Users/14304/.claude/plugins/superpowers/hooks/session-start\")",
+      "Bash(npm install *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"username\\\\\":\\\\\"admin\\\\\",\\\\\"password\\\\\":\\\\\"admin123\\\\\"}\")",
+      "Bash(curl -s http://localhost:3000/api/modules -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJzdXBlcmFkbWluIiwiaWF0IjoxNzc3MTYzNTg5LCJleHAiOjE3Nzc3NjgzODl9.tatDKNFViulQdkr_MLrJnpM35QsHwYqGYxDqCEYVzBs')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(npm run *)",
+      "Bash(claude plugin *)",
+      "Bash(where bash *)",
+      "Bash(export CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\Git\\\\usr\\\\bin\\\\bash.exe\")",
+      "Bash(taskkill //F //PID 31404)",
+      "Bash(node index.js)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const {db} = require\\('./db'\\); const groups = db.prepare\\('SELECT g.*, \\(SELECT COUNT\\(*\\) FROM group_members WHERE group_id=g.id\\) as cnt FROM groups g ORDER BY month_year DESC'\\).all\\(\\); groups.forEach\\(g => console.log\\(JSON.stringify\\({id:g.id,name:g.name,month:g.month_year,status:g.status,members:g.cnt,submission_id:g.submission_id}\\)\\)\\); console.log\\('---'\\); const subs = db.prepare\\('SELECT id, status, employee_name, subcategory_name, photo_urls FROM submissions ORDER BY id DESC LIMIT 5'\\).all\\(\\); subs.forEach\\(s => console.log\\(JSON.stringify\\(s\\)\\)\\);\")",
+      "Bash(npx localtunnel *)",
+      "Bash(/c/Users/14304/AppData/Local/Microsoft/WinGet/Packages/Fly-io.flyctl_Microsoft.Winget.Source_8wekyb3d8bbwe/flyctl.exe auth *)"
+    ]
+  }
+}

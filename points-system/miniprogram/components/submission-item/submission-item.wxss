@@ -1,0 +1,52 @@
+.submission-item {
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 1rpx 8rpx rgba(0,0,0,0.04);
+}
+.item-header {
+  margin-bottom: 12rpx;
+}
+.module-tag {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 22rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  margin-right: 12rpx;
+}
+.sub-name {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+.item-body {
+  margin-bottom: 12rpx;
+}
+.employee-info {
+  font-size: 24rpx;
+  color: var(--text-secondary);
+}
+.item-desc {
+  font-size: 26rpx;
+  color: var(--text-secondary);
+}
+.item-footer {
+  margin-top: 8rpx;
+}
+.thumb {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 6rpx;
+  margin-right: 8rpx;
+}
+.footer-text {
+  font-size: 22rpx;
+  color: var(--text-hint);
+  margin-left: 12rpx;
+}
+.footer-date {
+  font-size: 22rpx;
+  color: var(--text-hint);
+  margin-left: 12rpx;
+}

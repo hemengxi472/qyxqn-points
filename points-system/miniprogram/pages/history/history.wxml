@@ -1,0 +1,18 @@
+<view class="container">
+  <text class="page-title">积分流水</text>
+  <text class="page-sub">共 {{total}} 条记录</text>
+
+  <view class="log-list" wx:if="{{logs.length > 0}}">
+    <view class="log-item" wx:for="{{logs}}" wx:key="_id" data-id="{{item._id}}" bindtap="onTapLog">
+      <view class="log-left">
+        <text class="log-name">{{item.moduleName}} · {{item.subcategoryName}}</text>
+        <text class="log-desc">{{item.description}}</text>
+        <text class="log-date">{{item.createdAt}}</text>
+      </view>
+      <text class="log-pts">+{{item.points}}</text>
+    </view>
+  </view>
+
+  <empty-state wx:if="{{logs.length === 0 && !loading}}" text="暂无积分记录" subText="提交申请获得积分吧" />
+  <view class="loading-more" wx:if="{{loading}}"><text>加载中...</text></view>
+</view>

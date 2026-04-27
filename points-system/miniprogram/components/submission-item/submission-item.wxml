@@ -1,0 +1,25 @@
+<view class="submission-item">
+  <view class="item-header flex-between">
+    <view class="flex-row">
+      <text class="module-tag">{{item.moduleName}}</text>
+      <text class="sub-name">{{item.subcategoryName}}</text>
+    </view>
+    <status-badge status="{{item.status}}" />
+  </view>
+  <view class="item-body" wx:if="{{showEmployee}}">
+    <text class="employee-info">{{item.employeeName}} · {{item.department}} · {{item.employeeId}}</text>
+  </view>
+  <view class="item-body" wx:if="{{item.description}}">
+    <text class="item-desc">{{item.description}}</text>
+  </view>
+  <view class="item-footer flex-between">
+    <view class="flex-row">
+      <image wx:if="{{item.photoUrls && item.photoUrls.length > 0}}" class="thumb" src="{{item.photoUrls[0]}}" mode="aspectFill" />
+      <text class="footer-text" wx:if="{{item.photoUrls && item.photoUrls.length > 1}}">+{{item.photoUrls.length - 1}}</text>
+    </view>
+    <view class="flex-row">
+      <text class="footer-text" wx:if="{{item.pointsAwarded}}">+{{item.pointsAwarded}}分</text>
+      <text class="footer-date">{{item.createdAt}}</text>
+    </view>
+  </view>
+</view>

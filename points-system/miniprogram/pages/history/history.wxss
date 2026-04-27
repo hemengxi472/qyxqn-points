@@ -1,0 +1,52 @@
+.page-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  display: block;
+}
+.page-sub {
+  font-size: 24rpx;
+  color: var(--text-hint);
+  display: block;
+  margin-bottom: 20rpx;
+}
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.log-item {
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 20rpx 24rpx;
+  display: flex;
+  align-items: center;
+}
+.log-left {
+  flex: 1;
+}
+.log-name {
+  font-size: 28rpx;
+  font-weight: 500;
+  display: block;
+}
+.log-desc {
+  font-size: 24rpx;
+  color: var(--text-secondary);
+  display: block;
+  margin-top: 4rpx;
+}
+.log-date {
+  font-size: 22rpx;
+  color: var(--text-hint);
+  margin-top: 4rpx;
+}
+.log-pts {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--success);
+}
+.loading-more {
+  text-align: center;
+  padding: 24rpx;
+  color: var(--text-hint);
+}

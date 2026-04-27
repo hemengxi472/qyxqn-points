@@ -1,0 +1,31 @@
+<view class="container">
+  <view class="info-card">
+    <view class="info-row">
+      <text class="info-label">模块</text>
+      <text class="info-value">{{moduleName}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">子项</text>
+      <text class="info-value primary">{{subcategoryName}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">分值</text>
+      <text class="info-value points">+{{defaultPoints}} 分</text>
+    </view>
+  </view>
+
+  <view class="form-section">
+    <text class="section-label">描述说明</text>
+    <textarea class="desc-input" placeholder="请简要说明本次申请的内容，如：2026年4月参加无偿献血..." value="{{description}}" bindinput="onDescInput" maxlength="300" />
+  </view>
+
+  <view class="form-section">
+    <text class="section-label">上传证明材料</text>
+    <text class="section-hint">请上传清晰的照片作为证明，最多9张</text>
+    <photo-uploader photos="{{photos}}" bindchange="onPhotoChange" />
+  </view>
+
+  <view class="mt-24 mb-20">
+    <button class="btn-primary" bindtap="onSubmit" loading="{{submitting}}">提交申请</button>
+  </view>
+</view>

@@ -1,0 +1,61 @@
+<view class="container" wx:if="{{submission}}">
+  <view class="card">
+    <view class="flex-between mb-20">
+      <text class="review-title">{{submission.employeeName}} 的申请</text>
+      <status-badge status="{{submission.status}}" />
+    </view>
+    <view class="info-row">
+      <text class="info-label">员工</text>
+      <text class="info-value">{{submission.employeeName}} · {{submission.department}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">工号</text>
+      <text class="info-value">{{submission.employeeId}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">模块</text>
+      <text class="info-value">{{submission.moduleName}} · {{submission.subcategoryName}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">描述</text>
+      <text class="info-value">{{submission.description || '无'}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">提交时间</text>
+      <text class="info-value">{{submission.createdAt}}</text>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{submission.reviewerId}}">
+    <text class="section-title">审核结果</text>
+    <view class="info-row">
+      <text class="info-label">审核人</text>
+      <text class="info-value">{{submission.reviewerName}}</text>
+    </view>
+    <view class="info-row" wx:if="{{submission.pointsAwarded}}">
+      <text class="info-label">积分</text>
+      <text class="info-value points">+{{submission.pointsAwarded}}</text>
+    </view>
+    <view class="info-row" wx:if="{{submission.reviewComment}}">
+      <text class="info-label">意见</text>
+      <text class="info-value">{{submission.reviewComment}}</text>
+    </view>
+  </view>
+
+  <view class="photo-section">
+    <text class="section-label">证明材料 ({{submission.photoUrls.length}}张)</text>
+    <view class="photo-grid">
+      <image wx:for="{{submission.photoUrls}}" wx:key="*this" class="photo-thumb" src="{{item}}" mode="aspectFill" data-index="{{index}}" bindtap="onPreview" />
+    </view>
+  </view>
+
+  <view style="height: 120rpx"></view>
+
+  <review-action-bar
+    visible="{{submission.status === 'pending'}}"
+    defaultPoints="{{submission.pointsAwarded || 2}}"
+    submitting="{{reviewing}}"
+    bindapprove="onApprove"
+    bindreject="onReject"
+  />
+</view>

@@ -1,0 +1,23 @@
+<view class="login-page" style="padding-top:{{statusBarHeight}}px">
+  <view class="login-bg">
+    <view class="brand">
+      <text class="brand-icon">⭐</text>
+      <text class="brand-title">青年能力积分</text>
+      <text class="brand-sub">中国移动 · 青年员工成长平台</text>
+    </view>
+  </view>
+
+  <view class="login-card" wx:if="{{step === 'register'}}">
+    <text class="card-title">完善信息，立即加入</text>
+    <view class="form">
+      <input class="input" placeholder="请输入姓名" value="{{form.name}}" data-field="name" bindinput="onInput" />
+      <input class="input" placeholder="请输入工号" value="{{form.employeeId}}" data-field="employeeId" bindinput="onInput" />
+      <input class="input" placeholder="请输入部门" value="{{form.department}}" data-field="department" bindinput="onInput" />
+      <button class="btn-primary btn-full" bindtap="onRegister" loading="{{submitting}}">注 册</button>
+    </view>
+  </view>
+
+  <view class="login-loading" wx:if="{{step === 'loading'}}">
+    <text class="loading-text">正在检测登录状态...</text>
+  </view>
+</view>

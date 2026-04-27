@@ -1,0 +1,5 @@
+{
+  "name": "auth",
+  "version": "1.0.0",
+  "description": "用户认证云函数"
+}

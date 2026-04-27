@@ -1,0 +1,6 @@
+{
+  "usingComponents": {
+    "status-badge": "../../../components/status-badge/status-badge",
+    "review-action-bar": "../../../components/review-action-bar/review-action-bar"
+  }
+}

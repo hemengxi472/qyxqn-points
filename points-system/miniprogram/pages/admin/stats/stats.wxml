@@ -1,0 +1,40 @@
+<view class="container" wx:if="{{stats}}">
+  <view class="overview-grid">
+    <view class="ov-card">
+      <text class="ov-number">{{stats.totalEmployees}}</text>
+      <text class="ov-label">活跃员工</text>
+    </view>
+    <view class="ov-card">
+      <text class="ov-number">{{stats.totalSubmissions}}</text>
+      <text class="ov-label">总申请数</text>
+    </view>
+    <view class="ov-card highlight">
+      <text class="ov-number">{{stats.pendingReview}}</text>
+      <text class="ov-label">待审核</text>
+    </view>
+  </view>
+
+  <view class="card mt-24">
+    <text class="section-title">各模块积分分布</text>
+    <view class="module-bar" wx:for="{{stats.pointsByModule}}" wx:key="moduleName">
+      <text class="bar-label">{{item.moduleName}}</text>
+      <view class="bar-track">
+        <view class="bar-fill" style="width:{{item.total / stats.pointsByModule[0].total * 100 || 0}}%"></view>
+      </view>
+      <text class="bar-value">{{item.total}}分</text>
+    </view>
+  </view>
+
+  <view class="card mt-24">
+    <text class="section-title">积分排行榜 TOP 10</text>
+    <view class="rank-item" wx:for="{{stats.topEmployees}}" wx:key="employeeId">
+      <view class="rank-num {{index < 3 ? 'top' + (index + 1) : ''}}">{{index + 1}}</view>
+      <view class="rank-info">
+        <text class="rank-name">{{item.name}}</text>
+        <text class="rank-dept">{{item.department}}</text>
+      </view>
+      <text class="rank-points">{{item.totalPoints}}分</text>
+    </view>
+    <empty-state wx:if="{{stats.topEmployees.length === 0}}" text="暂无数据" />
+  </view>
+</view>

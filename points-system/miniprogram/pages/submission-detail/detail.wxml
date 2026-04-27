@@ -1,0 +1,49 @@
+<view class="container" wx:if="{{submission}}">
+  <view class="status-header">
+    <status-badge status="{{submission.status}}" />
+    <text class="status-title" wx:if="{{submission.status === 'pending'}}">等待管理员审核</text>
+    <text class="status-title" wx:if="{{submission.status === 'approved'}}">审核通过，获得积分</text>
+    <text class="status-title" wx:if="{{submission.status === 'rejected'}}">审核未通过</text>
+  </view>
+
+  <view class="card">
+    <view class="detail-row">
+      <text class="d-label">模块</text>
+      <text class="d-value">{{submission.moduleName}} · {{submission.subcategoryName}}</text>
+    </view>
+    <view class="detail-row" wx:if="{{submission.pointsAwarded}}">
+      <text class="d-label">获得积分</text>
+      <text class="d-value points">+{{submission.pointsAwarded}} 分</text>
+    </view>
+    <view class="detail-row">
+      <text class="d-label">描述</text>
+      <text class="d-value">{{submission.description || '无'}}</text>
+    </view>
+    <view class="detail-row">
+      <text class="d-label">提交时间</text>
+      <text class="d-value">{{submission.createdAt}}</text>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{submission.reviewerId}}">
+    <view class="detail-row">
+      <text class="d-label">审核人</text>
+      <text class="d-value">{{submission.reviewerName}}</text>
+    </view>
+    <view class="detail-row">
+      <text class="d-label">审核时间</text>
+      <text class="d-value">{{submission.reviewedAt}}</text>
+    </view>
+    <view class="detail-row" wx:if="{{submission.reviewComment}}">
+      <text class="d-label">审核意见</text>
+      <text class="d-value">{{submission.reviewComment}}</text>
+    </view>
+  </view>
+
+  <view class="photo-section">
+    <text class="section-label">证明材料 ({{submission.photoUrls.length}}张)</text>
+    <view class="photo-grid">
+      <image wx:for="{{submission.photoUrls}}" wx:key="*this" class="photo-thumb" src="{{item}}" mode="aspectFill" data-index="{{index}}" bindtap="onPreview" />
+    </view>
+  </view>
+</view>

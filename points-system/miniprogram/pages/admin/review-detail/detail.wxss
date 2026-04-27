@@ -1,0 +1,51 @@
+.review-title {
+  font-size: 32rpx;
+  font-weight: 500;
+}
+.info-row {
+  display: flex;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+.info-row:last-child {
+  border-bottom: none;
+}
+.info-label {
+  width: 120rpx;
+  font-size: 26rpx;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.info-value {
+  flex: 1;
+  font-size: 26rpx;
+}
+.info-value.points {
+  color: var(--success);
+  font-weight: 600;
+}
+.section-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 16rpx;
+}
+.section-label {
+  font-size: 28rpx;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 16rpx;
+}
+.photo-section {
+  margin-top: 24rpx;
+}
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.photo-thumb {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 8rpx;
+}

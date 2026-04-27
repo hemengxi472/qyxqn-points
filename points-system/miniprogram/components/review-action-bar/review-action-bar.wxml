@@ -1,0 +1,13 @@
+<view class="action-bar safe-bottom" wx:if="{{visible}}">
+  <view class="comment-box" wx:if="{{showReject}}">
+    <textarea class="comment-input" placeholder="请填写拒绝原因..." value="{{comment}}" bindinput="onCommentChange" maxlength="200" />
+    <view class="comment-actions">
+      <button class="btn-cancel" bindtap="cancelReject">取消</button>
+      <button class="btn-reject-confirm" bindtap="onReject">确认拒绝</button>
+    </view>
+  </view>
+  <view class="action-buttons" wx:else>
+    <button class="btn-reject" bindtap="showRejectForm">拒绝</button>
+    <button class="btn-approve" bindtap="onApprove" loading="{{submitting}}">通过 (+{{defaultPoints}}分)</button>
+  </view>
+</view>

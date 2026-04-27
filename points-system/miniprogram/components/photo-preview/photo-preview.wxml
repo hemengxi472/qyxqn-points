@@ -1,0 +1,6 @@
+<view class="preview-overlay" wx:if="{{visible}}" catchtap="onClose">
+  <view class="preview-grid" catchtap="">
+    <image wx:for="{{urls}}" wx:key="*this" class="preview-img" src="{{item}}" mode="aspectFill" data-index="{{index}}" bindtap="onPreview" />
+  </view>
+  <text class="preview-hint">点击图片可放大查看</text>
+</view>

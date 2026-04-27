@@ -1,0 +1,21 @@
+<view class="container">
+  <view class="list" wx:if="{{employees.length > 0}}">
+    <view class="emp-card" wx:for="{{employees}}" wx:key="_id">
+      <view class="emp-left">
+        <text class="emp-name">{{item.name}}</text>
+        <text class="emp-dept">{{item.department}} · {{item.employeeId}}</text>
+        <text class="emp-role">{{item.role === 'superadmin' ? '超级管理员' : item.role === 'admin' ? '管理员' : '员工'}}</text>
+      </view>
+      <view class="emp-right">
+        <text class="emp-points">{{item.totalPoints}}分</text>
+        <view class="emp-actions" wx:if="{{isSuperAdmin && item.role !== 'superadmin'}}">
+          <text class="action-link" wx:if="{{item.role === 'employee'}}" data-id="{{item._id}}" data-name="{{item.name}}" bindtap="onPromote">提拔</text>
+          <text class="action-link danger" data-id="{{item._id}}" data-name="{{item.name}}" data-status="{{item.status}}" bindtap="onDisable">{{item.status === 'active' ? '禁用' : '启用'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <empty-state wx:if="{{employees.length === 0 && !loading}}" text="暂无员工数据" />
+  <view class="loading-more" wx:if="{{loading}}"><text>加载中...</text></view>
+</view>
