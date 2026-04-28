@@ -303,7 +303,7 @@ async function handleRegister() {
   margin-bottom: 16px;
   color: #4D2D33;
   line-height: 1.2;
-  animation: gentleFloat 4s ease-in-out infinite, textGlow 3s ease-in-out infinite;
+  animation: gentleFloat 5s ease-in-out infinite, textGlow 3.6s ease-in-out infinite;
 }
 .title-deco {
   display: flex;

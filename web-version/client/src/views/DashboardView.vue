@@ -246,7 +246,7 @@ function animateCount(from, to, duration) {
   color: var(--text-primary);
   letter-spacing: 2px;
   line-height: 1.2;
-  animation: gentleFloat 4s ease-in-out infinite, textGlow 3s ease-in-out infinite;
+  animation: gentleFloat 4.2s ease-in-out infinite, textGlow 2.8s ease-in-out infinite;
 }
 .welcome-sub {
   font-size: 12px;
