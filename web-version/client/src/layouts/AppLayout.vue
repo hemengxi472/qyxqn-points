@@ -218,6 +218,7 @@ const pageTitle = computed(() => route.meta.title || '工作台')
   white-space: nowrap;
   letter-spacing: 2px;
   line-height: 1.2;
+  animation: gentleFloat 4s ease-in-out infinite, textGlow 3s ease-in-out infinite;
 }
 .brand-sub {
   font-size: 10px;
