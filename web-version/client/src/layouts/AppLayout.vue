@@ -19,8 +19,8 @@
             <span class="mark-char">青</span>
           </div>
           <div v-show="!isCollapse || isMobile" class="brand-text-wrap">
-            <span class="brand-title">青羊新青年</span>
-            <span class="brand-sub">能力积分系统</span>
+            <span class="brand-title">青春梦工厂</span>
+            <span class="brand-sub">青羊新青年</span>
           </div>
         </div>
 

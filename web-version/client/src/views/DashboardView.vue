@@ -7,8 +7,8 @@
           <span class="brand-char">青</span>
         </div>
         <div class="welcome-text">
-          <h1 class="welcome-title">青羊新青年</h1>
-          <p class="welcome-sub">青年员工能力积分系统</p>
+          <h1 class="welcome-title">青春梦工厂</h1>
+          <p class="welcome-sub">青羊新青年</p>
         </div>
       </div>
       <div class="welcome-right">

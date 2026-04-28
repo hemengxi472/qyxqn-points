@@ -26,13 +26,13 @@
         <div class="logo-mark">
           <span class="logo-char">青</span>
         </div>
-        <h1 class="brand-title">青羊新青年</h1>
+        <h1 class="brand-title">青春梦工厂</h1>
         <div class="title-deco">
           <span class="deco-dot" />
           <span class="deco-line" />
           <span class="deco-dot" />
         </div>
-        <p class="brand-desc">🌟 青年员工能力积分系统</p>
+        <p class="brand-desc">青羊新青年</p>
         <p class="brand-motto">以积分记录成长，用能力书写未来</p>
       </div>
 
