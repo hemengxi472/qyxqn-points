@@ -1,21 +1,60 @@
-const Database = require('better-sqlite3');
+const { createClient } = require('@libsql/client');
 const path = require('path');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'points.db');
+const TURSO_URL = process.env.TURSO_URL || '';
+const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || '';
 
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+// Use Turso in production (env var set), local SQLite file for dev
+const client = TURSO_URL
+  ? createClient({ url: TURSO_URL, authToken: TURSO_AUTH_TOKEN })
+  : createClient({ url: `file:${process.env.DB_PATH || path.join(__dirname, 'points.db')}` });
 
-function addColumnIfMissing(table, column, type) {
-  const rows = db.pragma(`table_info(${table})`);
-  if (!rows.some(r => r.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+function wrapClient(c) {
+  return {
+    prepare(sql) {
+      return {
+        async get(...params) {
+          const r = await c.execute({ sql, args: params.map(String) });
+          return r.rows[0];
+        },
+        async all(...params) {
+          const r = await c.execute({ sql, args: params.map(String) });
+          return r.rows;
+        },
+        async run(...params) {
+          const r = await c.execute({ sql, args: params.map(String) });
+          return { changes: r.rowsAffected, lastInsertRowid: r.lastInsertRowid ? Number(r.lastInsertRowid) : 0 };
+        }
+      };
+    }
+  };
+}
+
+// db is the async-compatible wrapper used in all route files
+const db = wrapClient(client);
+
+// For transactions: await trx(async (trx) => { trx.prepare(...).run() })
+async function trx(fn) {
+  const tx = await client.transaction();
+  const txDb = wrapClient(tx);
+  try {
+    await fn(txDb);
+    await tx.commit();
+  } catch (e) {
+    await tx.rollback();
+    throw e;
   }
 }
 
-function initDB() {
-  db.exec(`
+async function addColumnIfMissing(table, column, type) {
+  const r = await client.execute(`PRAGMA table_info(${table})`);
+  if (!r.rows.some(row => row.name === column)) {
+    await client.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
+async function initDB() {
+  await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
@@ -101,7 +140,6 @@ function initDB() {
     CREATE INDEX IF NOT EXISTS idx_points_log_user ON points_log(user_id);
     CREATE INDEX IF NOT EXISTS idx_points_summary_employee ON points_summary(employee_id);
 
-    -- 团队分组
     CREATE TABLE IF NOT EXISTS groups (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -127,7 +165,6 @@ function initDB() {
       UNIQUE(group_id, user_id)
     );
 
-    -- 作假记录
     CREATE TABLE IF NOT EXISTS fraud_records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id),
@@ -140,7 +177,6 @@ function initDB() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    -- 月度积分物化
     CREATE TABLE IF NOT EXISTS monthly_points (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id),
@@ -152,7 +188,6 @@ function initDB() {
       UNIQUE(user_id, month_year)
     );
 
-    -- 月度统一任务
     CREATE TABLE IF NOT EXISTS monthly_tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       month_year TEXT NOT NULL UNIQUE,
@@ -170,31 +205,24 @@ function initDB() {
     CREATE INDEX IF NOT EXISTS idx_monthly_tasks_month ON monthly_tasks(month_year);
   `);
 
-  // Migrate existing tables — add month_year column
-  addColumnIfMissing('submissions', 'month_year', "TEXT NOT NULL DEFAULT ''");
-  addColumnIfMissing('points_log', 'month_year', "TEXT NOT NULL DEFAULT ''");
-  addColumnIfMissing('groups', 'completion_description', "TEXT DEFAULT ''");
+  // Migrations
+  await addColumnIfMissing('submissions', 'month_year', "TEXT NOT NULL DEFAULT ''");
+  await addColumnIfMissing('points_log', 'month_year', "TEXT NOT NULL DEFAULT ''");
+  await addColumnIfMissing('groups', 'completion_description', "TEXT DEFAULT ''");
 
-  // Backfill month_year from created_at
-  db.exec(`
-    UPDATE submissions SET month_year = strftime('%Y-%m', created_at) WHERE month_year = '';
-    UPDATE points_log SET month_year = strftime('%Y-%m', created_at) WHERE month_year = '';
-  `);
+  // Backfill month_year
+  await client.execute(`UPDATE submissions SET month_year = strftime('%Y-%m', created_at) WHERE month_year = ''`);
+  await client.execute(`UPDATE points_log SET month_year = strftime('%Y-%m', created_at) WHERE month_year = ''`);
 
   // Migrate overwritten task_description to completion_description
-  db.exec(`
-    UPDATE groups SET completion_description = task_description, task_description = ''
-    WHERE status IN ('submitted', 'approved', 'rejected') AND task_description != ''
-      AND completion_description = '';
-  `);
+  await client.execute(`UPDATE groups SET completion_description = task_description, task_description = ''
+    WHERE status IN ('submitted', 'approved', 'rejected') AND task_description != '' AND completion_description = ''`);
 
-  // Migrate users table CHECK constraint to include 'pending' status
-  const tableSQL = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();
-  if (tableSQL && !tableSQL.sql.includes("'pending'")) {
-    // Clean up leftover from previous failed migration
-    db.exec('DROP TABLE IF EXISTS users_new');
-    db.exec(`
-      PRAGMA foreign_keys = OFF;
+  // Migrate users table CHECK constraint to include 'pending'
+  const tableSQL = await client.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'");
+  if (tableSQL.rows.length > 0 && !tableSQL.rows[0].sql.includes("'pending'")) {
+    await client.executeMultiple(`
+      DROP TABLE IF EXISTS users_new;
       CREATE TABLE users_new (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
@@ -211,10 +239,9 @@ function initDB() {
       INSERT INTO users_new SELECT * FROM users;
       DROP TABLE users;
       ALTER TABLE users_new RENAME TO users;
-      PRAGMA foreign_keys = ON;
     `);
     console.log('[DB] Migrated users table: added pending status support');
   }
 }
 
-module.exports = { db, initDB };
+module.exports = { db, trx, initDB };

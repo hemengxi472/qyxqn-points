@@ -6,9 +6,10 @@ const { db, initDB } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+(async () => {
 // Init database
-initDB();
-require('./seed').seed(db);
+await initDB();
+await require('./seed').seed(db);
 
 // Middleware
 app.use(cors());
@@ -37,3 +38,4 @@ app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
   console.log(`Default admin: admin / admin123`);
 });
+})();

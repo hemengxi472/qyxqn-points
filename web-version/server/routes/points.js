@@ -5,12 +5,12 @@ const { authMiddleware } = require('../middleware/auth');
 const router = express.Router();
 
 // GET /api/points/dashboard
-router.get('/dashboard', authMiddleware, (req, res) => {
-  const summary = db.prepare('SELECT * FROM points_summary WHERE user_id = ?').get(req.user.id);
+router.get('/dashboard', authMiddleware, async (req, res) => {
+  const summary = await db.prepare('SELECT * FROM points_summary WHERE user_id = ?').get(req.user.id);
   const monthYear = new Date().toISOString().substring(0, 7);
 
   // Current month's group
-  const member = db.prepare(`
+  const member = await db.prepare(`
     SELECT gm.group_id FROM group_members gm
     JOIN groups g ON gm.group_id = g.id
     WHERE gm.user_id = ? AND g.month_year = ?
@@ -18,9 +18,9 @@ router.get('/dashboard', authMiddleware, (req, res) => {
 
   let group = null;
   if (member) {
-    const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(member.group_id);
-    const monthlyTask = db.prepare('SELECT task_description FROM monthly_tasks WHERE month_year = ?').get(monthYear);
-    const members = db.prepare(`
+    const g = await db.prepare('SELECT * FROM groups WHERE id = ?').get(member.group_id);
+    const monthlyTask = await db.prepare('SELECT task_description FROM monthly_tasks WHERE month_year = ?').get(monthYear);
+    const members = await db.prepare(`
       SELECT gm.employee_name, gm.department
       FROM group_members gm WHERE gm.group_id = ?
     `).all(member.group_id);
@@ -34,7 +34,7 @@ router.get('/dashboard', authMiddleware, (req, res) => {
   }
 
   // Monthly points
-  const mp = db.prepare('SELECT * FROM monthly_points WHERE user_id = ? AND month_year = ?').get(req.user.id, monthYear);
+  const mp = await db.prepare('SELECT * FROM monthly_points WHERE user_id = ? AND month_year = ?').get(req.user.id, monthYear);
 
   if (!summary) {
     return res.json({
@@ -43,7 +43,7 @@ router.get('/dashboard', authMiddleware, (req, res) => {
     });
   }
 
-  const modules = db.prepare('SELECT id, name, icon FROM modules WHERE is_active = 1 ORDER BY sort_order').all();
+  const modules = (await db.prepare('SELECT id, name, icon FROM modules WHERE is_active = 1 ORDER BY sort_order').all());
   const modulePoints = JSON.parse(summary.module_points || '{}');
   const moduleBreakdown = modules.map(m => ({
     moduleId: m.id,
@@ -52,7 +52,7 @@ router.get('/dashboard', authMiddleware, (req, res) => {
     points: modulePoints[String(m.id)] || 0
   }));
 
-  const recentLogs = db.prepare(`
+  const recentLogs = await db.prepare(`
     SELECT id, module_name, subcategory_name, points, type, description, created_at
     FROM points_log WHERE user_id = ? ORDER BY created_at DESC LIMIT 5
   `).all(req.user.id);
@@ -77,12 +77,12 @@ router.get('/dashboard', authMiddleware, (req, res) => {
 });
 
 // GET /api/points/history
-router.get('/history', authMiddleware, (req, res) => {
+router.get('/history', authMiddleware, async (req, res) => {
   const { page = 1, pageSize = 20 } = req.query;
   const offset = (Number(page) - 1) * Number(pageSize);
 
-  const total = db.prepare('SELECT COUNT(*) as cnt FROM points_log WHERE user_id = ?').get(req.user.id).cnt;
-  const items = db.prepare(`
+  const total = (await db.prepare('SELECT COUNT(*) as cnt FROM points_log WHERE user_id = ?').get(req.user.id)).cnt;
+  const items = await db.prepare(`
     SELECT id, module_name, subcategory_name, points, type, description, created_at
     FROM points_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
   `).all(req.user.id, Number(pageSize), offset);

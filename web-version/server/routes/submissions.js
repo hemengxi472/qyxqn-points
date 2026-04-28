@@ -23,8 +23,8 @@ router.post('/upload', authMiddleware, upload.array('files', 9), (req, res) => {
 });
 
 // POST /api/submissions - create submission
-router.post('/', authMiddleware, (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+router.post('/', authMiddleware, async (req, res) => {
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ message: '用户不存在' });
 
   const { moduleId, subcategoryName, description, photoUrls } = req.body;
@@ -32,12 +32,12 @@ router.post('/', authMiddleware, (req, res) => {
     return res.status(400).json({ message: '请选择积分模块和子项' });
   }
 
-  const module = db.prepare('SELECT * FROM modules WHERE id = ?').get(moduleId);
+  const module = await db.prepare('SELECT * FROM modules WHERE id = ?').get(moduleId);
   if (!module || !module.is_active) {
     return res.status(404).json({ message: '模块不存在或已禁用' });
   }
 
-  const sub = db.prepare('SELECT * FROM subcategories WHERE module_id = ? AND name = ? AND is_active = 1').get(moduleId, subcategoryName);
+  const sub = await db.prepare('SELECT * FROM subcategories WHERE module_id = ? AND name = ? AND is_active = 1').get(moduleId, subcategoryName);
   if (!sub) {
     return res.status(404).json({ message: '积分子项不存在或已禁用' });
   }
@@ -48,7 +48,7 @@ router.post('/', authMiddleware, (req, res) => {
   // Check maxTimes per year
   if (sub.max_times > 0) {
     const yearStart = new Date().getFullYear() + '-01-01';
-    const count = db.prepare(`
+    const count = await db.prepare(`
       SELECT COUNT(*) as cnt FROM submissions
       WHERE user_id = ? AND module_id = ? AND subcategory_name = ?
         AND status IN ('pending', 'approved') AND created_at >= ?
@@ -58,18 +58,18 @@ router.post('/', authMiddleware, (req, res) => {
     }
   }
 
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO submissions (user_id, employee_id, employee_name, department, module_id, module_name, subcategory_name, description, photo_urls, month_year)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(user.id, user.employee_id, user.name, user.department, moduleId, module.name, subcategoryName, description || '', JSON.stringify(photoUrls || []),
     new Date().toISOString().substring(0, 7));
 
-  const submission = db.prepare('SELECT * FROM submissions WHERE id = ?').get(result.lastInsertRowid);
+  const submission = await db.prepare('SELECT * FROM submissions WHERE id = ?').get(result.lastInsertRowid);
   res.json({ submission: formatSubmission(submission) });
 });
 
 // GET /api/submissions - my submissions
-router.get('/', authMiddleware, (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   const { status, page = 1, pageSize = 20 } = req.query;
   const offset = (Number(page) - 1) * Number(pageSize);
 
@@ -80,8 +80,8 @@ router.get('/', authMiddleware, (req, res) => {
     params.push(status);
   }
 
-  const total = db.prepare(`SELECT COUNT(*) as cnt FROM submissions ${where}`).get(...params).cnt;
-  const items = db.prepare(`
+  const total = (await db.prepare(`SELECT COUNT(*) as cnt FROM submissions ${where}`).get(...params)).cnt;
+  const items = await db.prepare(`
     SELECT * FROM submissions ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?
   `).all(...params, Number(pageSize), offset);
 
@@ -89,8 +89,8 @@ router.get('/', authMiddleware, (req, res) => {
 });
 
 // GET /api/submissions/:id
-router.get('/:id', authMiddleware, (req, res) => {
-  const submission = db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
+router.get('/:id', authMiddleware, async (req, res) => {
+  const submission = await db.prepare('SELECT * FROM submissions WHERE id = ?').get(req.params.id);
   if (!submission) return res.status(404).json({ message: '申请记录不存在' });
   if (submission.user_id !== req.user.id && req.user.role === 'employee') {
     return res.status(403).json({ message: '无权查看该申请' });

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
+const { trx } = require('./db');
 
-function seed(db) {
+async function seed(db) {
 
 const MODULES = [
   {
@@ -38,82 +39,100 @@ const MODULES = [
   {
     name: '纪律', description: '纪律相关积分，包括每月团队任务完成、诚实守信等，由系统自动管理',
     icon: '⚖️', sort_order: 4, is_active: 1,
-    subcategories: []  // No subcategories — employee cannot apply; points from group tasks / fraud system
+    subcategories: []
   }
 ];
 
 // Seed modules
-const existingModules = db.prepare('SELECT COUNT(*) as cnt FROM modules').get();
-if (existingModules.cnt === 0) {
-  const insertModule = db.prepare('INSERT INTO modules (name, description, icon, sort_order, is_active) VALUES (?, ?, ?, ?, ?)');
-  const insertSub = db.prepare('INSERT INTO subcategories (module_id, name, description, points, max_times, requires_photo, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-
-  const tx = db.transaction(() => {
+const existingModules = (await db.prepare('SELECT COUNT(*) as cnt FROM modules').get()).cnt;
+if (existingModules === 0) {
+  await trx(async (tx) => {
     for (const mod of MODULES) {
-      const result = insertModule.run(mod.name, mod.description, mod.icon, mod.sort_order, mod.is_active);
-      const moduleId = result.lastInsertRowid;
+      const r = await tx.prepare('INSERT INTO modules (name, description, icon, sort_order, is_active) VALUES (?, ?, ?, ?, ?)')
+        .run(mod.name, mod.description, mod.icon, mod.sort_order, mod.is_active);
+      const moduleId = r.lastInsertRowid;
       for (const sub of mod.subcategories) {
-        insertSub.run(moduleId, sub.name, sub.description, sub.points, sub.max_times, sub.requires_photo, sub.sort_order, sub.is_active);
+        await tx.prepare('INSERT INTO subcategories (module_id, name, description, points, max_times, requires_photo, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .run(moduleId, sub.name, sub.description, sub.points, sub.max_times, sub.requires_photo, sub.sort_order, sub.is_active);
       }
     }
   });
-  tx();
   console.log(`已创建 ${MODULES.length} 个模块及子项`);
 } else {
   // Existing database — migrate subcategories + ensure module 4 exists
-  const disciplineModule = db.prepare("SELECT id FROM modules WHERE name = '纪律'").get();
+  const disciplineModule = await db.prepare("SELECT id FROM modules WHERE name = '纪律'").get();
   if (!disciplineModule) {
-    db.prepare('INSERT INTO modules (name, description, icon, sort_order, is_active) VALUES (?, ?, ?, ?, ?)')
+    await db.prepare('INSERT INTO modules (name, description, icon, sort_order, is_active) VALUES (?, ?, ?, ?, ?)')
       .run('纪律', '纪律相关积分，包括每月团队任务完成、诚实守信等，由系统自动管理', '⚖️', 4, 1);
     console.log('已添加纪律模块');
   } else {
     console.log('纪律模块已存在');
   }
 
-  // Update subcategories: deactivate old ones, insert new ones
-  const migrateTx = db.transaction(() => {
+  await trx(async (tx) => {
     for (const mod of MODULES) {
-      const modRow = db.prepare("SELECT id FROM modules WHERE name = ?").get(mod.name);
+      const modRow = await tx.prepare("SELECT id FROM modules WHERE name = ?").get(mod.name);
       if (!modRow) continue;
       const moduleId = modRow.id;
 
-      // Update module icon + description
-      db.prepare('UPDATE modules SET icon = ?, description = ? WHERE id = ?')
+      await tx.prepare('UPDATE modules SET icon = ?, description = ? WHERE id = ?')
         .run(mod.icon, mod.description, moduleId);
 
       for (const sub of mod.subcategories) {
-        const existing = db.prepare('SELECT id, is_active FROM subcategories WHERE module_id = ? AND name = ?').get(moduleId, sub.name);
+        const existing = await tx.prepare('SELECT id, is_active FROM subcategories WHERE module_id = ? AND name = ?').get(moduleId, sub.name);
         if (existing) {
-          // Reactivate and update
-          db.prepare('UPDATE subcategories SET is_active = 1, points = ?, max_times = ?, requires_photo = ?, sort_order = ?, description = ? WHERE id = ?')
+          await tx.prepare('UPDATE subcategories SET is_active = 1, points = ?, max_times = ?, requires_photo = ?, sort_order = ?, description = ? WHERE id = ?')
             .run(sub.points, sub.max_times, sub.requires_photo, sub.sort_order, sub.description, existing.id);
         } else {
-          db.prepare('INSERT INTO subcategories (module_id, name, description, points, max_times, requires_photo, sort_order, is_active) VALUES (?,?,?,?,?,?,?,?)')
+          await tx.prepare('INSERT INTO subcategories (module_id, name, description, points, max_times, requires_photo, sort_order, is_active) VALUES (?,?,?,?,?,?,?,?)')
             .run(moduleId, sub.name, sub.description, sub.points, sub.max_times, sub.requires_photo, sub.sort_order, 1);
         }
       }
 
-      // Deactivate subcategories that are no longer in the seed
       const newNames = mod.subcategories.map(s => s.name);
-      db.prepare(`UPDATE subcategories SET is_active = 0 WHERE module_id = ? AND name NOT IN (${newNames.map(() => '?').join(',')})`)
-        .run(moduleId, ...newNames);
+      if (newNames.length > 0) {
+        await tx.prepare(`UPDATE subcategories SET is_active = 0 WHERE module_id = ? AND name NOT IN (${newNames.map(() => '?').join(',')})`)
+          .run(moduleId, ...newNames);
+      }
     }
   });
-  migrateTx();
   console.log('模块及子项已更新');
 }
 
 // Seed super admin (default: admin / admin123)
-const existingAdmin = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE role = ?').get('superadmin');
+const existingAdmin = await db.prepare('SELECT COUNT(*) as cnt FROM users WHERE role = ?').get('superadmin');
 if (existingAdmin.cnt === 0) {
   const hash = bcrypt.hashSync('admin123', 10);
-  db.prepare(`
-    INSERT INTO users (username, password_hash, employee_id, name, department, role, status)
-    VALUES (?, ?, ?, ?, ?, 'superadmin', 'active')
-  `).run('admin', hash, 'admin001', '超级管理员', '综合部');
+  await db.prepare(`INSERT INTO users (username, password_hash, employee_id, name, department, role, status) VALUES (?, ?, ?, ?, ?, 'superadmin', 'active')`)
+    .run('admin', hash, 'admin001', '超级管理员', '综合部');
   console.log('已创建超级管理员: admin / admin123');
 } else {
   console.log('超级管理员已存在，跳过');
+}
+
+// Seed employee accounts (persistent across restarts)
+const EMPLOYEES = [
+  { username: 'ABC', password: '123456', name: '何孟溪', employeeId: '12345678', department: '青羊区' },
+  { username: 'hmx', password: '123456', name: '张三', employeeId: '123', department: '技术部' },
+  { username: 'testuser', password: '123456', name: '吴九', employeeId: 'TEST001', department: '技术部' },
+  { username: 'user1', password: '123456', name: '李四', employeeId: 'EMP001', department: '技术部' },
+  { username: 'user2', password: '123456', name: '王五', employeeId: 'EMP002', department: '市场部' },
+  { username: 'user3', password: '123456', name: '赵六', employeeId: 'EMP003', department: '市场部' },
+  { username: 'user4', password: '123456', name: '孙七', employeeId: 'EMP004', department: '综合部' },
+  { username: 'user5', password: '123456', name: '周八', employeeId: 'EMP005', department: '综合部' },
+];
+const existingEmployees = (await db.prepare('SELECT COUNT(*) as cnt FROM users WHERE role = ?').get('employee')).cnt;
+if (existingEmployees === 0) {
+  await trx(async (tx) => {
+    for (const emp of EMPLOYEES) {
+      const hash = bcrypt.hashSync(emp.password, 10);
+      await tx.prepare('INSERT INTO users (username, password_hash, employee_id, name, department, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(emp.username, hash, emp.employeeId, emp.name, emp.department, 'employee', 'active');
+    }
+  });
+  console.log(`已创建 ${EMPLOYEES.length} 个员工账号，默认密码: 123456`);
+} else {
+  console.log(`已有 ${existingEmployees} 个员工账号，跳过`);
 }
 
 console.log('数据库初始化完成');
@@ -122,9 +141,11 @@ console.log('数据库初始化完成');
 // Run directly if called as script
 if (require.main === module) {
   const { db, initDB } = require('./db');
-  initDB();
-  seed(db);
-  process.exit(0);
+  (async () => {
+    await initDB();
+    await seed(db);
+    process.exit(0);
+  })();
 }
 
 module.exports = { seed };

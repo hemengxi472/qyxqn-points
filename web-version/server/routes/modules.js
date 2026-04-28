@@ -4,13 +4,13 @@ const { db } = require('../db');
 const router = express.Router();
 
 // GET /api/modules
-router.get('/', (_req, res) => {
-  const modules = db.prepare(`
+router.get('/', async (_req, res) => {
+  const modules = (await db.prepare(`
     SELECT * FROM modules WHERE is_active = 1 ORDER BY sort_order
-  `).all();
+  `).all());
 
-  const result = modules.map(mod => {
-    const subcategories = db.prepare(`
+  const result = await Promise.all(modules.map(async (mod) => {
+    const subcategories = await db.prepare(`
       SELECT name, description, points, max_times, requires_photo, sort_order, is_active
       FROM subcategories WHERE module_id = ? AND is_active = 1 ORDER BY sort_order
     `).all(mod.id);
@@ -29,7 +29,7 @@ router.get('/', (_req, res) => {
         requiresPhoto: !!s.requires_photo
       }))
     };
-  });
+  }));
 
   res.json({ modules: result });
 });
