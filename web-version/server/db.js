@@ -397,6 +397,46 @@ async function initDB() {
   await client.execute(`CREATE INDEX IF NOT EXISTS idx_fraud_records_quarter ON fraud_records(user_id, quarter)`);
 
   // ------------------------------------------------------------------
+  // 子项加分上限校正（依据 表2 六大维度积分规则）
+  //
+  // 这些子项最初建表时把**维度的**加分上限抄到了每一行（有成长 3×60、有担当 3×30
+  // …），员工端会把"每项都能拿满 60"读成制度。表2 里的分值是按子项给的，这里补齐。
+  //
+  // 为什么放在 db.js 而不是 seed.js：seed 只在 INSERT 时写这些值（seed.js 里
+  // "只插入不覆盖文案"），线上这些行早就存在了，走 INSERT 那条路径根本改不到。
+  //
+  // 幂等靠守卫而不是靠标记表：只有当 bonus_cap 还等于**维度**bonus_cap 时才改，
+  // 也就是"还停留在旧错误状态"。改完之后两者不再相等，重跑自然不命中；
+  // 管理员事后手工调过的值也不会被覆盖（那时两个数已经不相等了）。
+  //
+  // 唯一的误伤面：管理员如果故意把某个子项调回"恰好等于维度上限"，会被重置一次。
+  // 这个取舍是为了不引入一张只为跑一次的标记表。
+  // ------------------------------------------------------------------
+  const SUB_BONUS_CAP_FIX = [
+    ['health', '身体健康', 10], ['health', '心理健康', 0],
+    ['skill', '专业扎实', 10], ['skill', '高效执行', 10], ['skill', '跨界学习', 10],
+    ['growth', '持续成长', 60], ['growth', '自信自强', 60], ['growth', '品质修养', 60],
+    ['wisdom', '全局思维', 10], ['wisdom', '职业规划', 10], ['wisdom', '难题破解', 10],
+    ['duty', '岗位履职担当', 15], ['duty', '团队协同担当', 10], ['duty', '青年志愿担当', 5],
+    ['discipline', '合规纪律', 10], ['discipline', '职业操守', 10], ['discipline', '自我管理', 0]
+  ];
+  let bonusCapFixed = 0;
+  for (const [code, subName, target] of SUB_BONUS_CAP_FIX) {
+    const r = await db.prepare(
+      `UPDATE subcategories
+          SET bonus_cap = ?
+        WHERE name = ?
+          AND module_id = (SELECT id FROM modules WHERE dimension_code = ?)
+          AND bonus_cap <> ?
+          AND bonus_cap = (SELECT bonus_cap FROM modules WHERE dimension_code = ?)`
+    ).run(target, subName, code, target, code);
+    bonusCapFixed += Number(r.changes || 0);
+  }
+  if (bonusCapFixed > 0) {
+    console.log(`子项加分上限已按表2 校正 ${bonusCapFixed} 条`);
+  }
+
+  // ------------------------------------------------------------------
   // monthly_tasks 重建：这是唯一必须重建的表
   //
   // monthly_tasks.month_year 带 UNIQUE。季度化之后同一季度会有多行（7/8/9 月各
