@@ -42,6 +42,7 @@
             <el-switch v-model="mod.isActive" size="small" @change="toggleModule(mod)" />
             <el-button size="small" text @click="openEditModule(mod)">编辑</el-button>
             <el-button size="small" text type="primary" @click="showSubs(mod)">子项管理</el-button>
+            <el-button size="small" text type="danger" @click="deleteModule(mod)">删除</el-button>
           </div>
         </div>
 
@@ -216,7 +217,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 
 const modules = ref([])
@@ -308,6 +309,23 @@ async function saveModule() {
 async function toggleModule(mod) {
   await api.put(`/admin/modules/${mod.id}/toggle`)
   ElMessage.success(mod.isActive ? '模块已启用' : '模块已禁用')
+}
+
+// 删除是不可恢复的。子项跟着一起删，所以确认框里要说出来。
+// 有历史记录的维度会被服务端 409 拒掉（那会让统计页把员工挣过的分算丢），
+// 拒绝理由由 api 拦截器弹出。
+async function deleteModule(mod) {
+  try {
+    await ElMessageBox.confirm(
+      `将彻底删除「${mod.name}」维度及其下的全部积分子项。\n\n仅当该维度没有任何申请和积分流水时才能删除；有历史记录时会提示改用「禁用」—— 停用同样不出现在员工端，但历史分还在。此操作不可恢复。`,
+      '删除评价维度',
+      { type: 'error', confirmButtonText: '确认删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' }
+    )
+    await api.delete(`/admin/modules/${mod.id}`)
+    ElMessage.success(`已删除「${mod.name}」`)
+    if (expandedId.value === mod.id) expandedId.value = null
+    loadModules()
+  } catch { /* cancelled 或已由拦截器提示 */ }
 }
 
 async function showSubs(mod) {

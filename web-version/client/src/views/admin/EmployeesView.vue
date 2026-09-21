@@ -28,12 +28,18 @@
             {{ row.status === 'active' ? '正常' : '禁用' }}
           </template>
         </el-table-column>
-        <el-table-column v-if="auth.isSuperAdmin" label="操作" width="180" align="center" fixed="right">
+        <el-table-column v-if="auth.isSuperAdmin" label="操作" width="240" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.role === 'employee'" type="primary" link size="small" @click="handlePromote(row)">提拔管理</el-button>
             <el-button type="danger" link size="small" @click="handleDisable(row)">
               {{ row.status === 'active' ? '禁用' : '启用' }}
             </el-button>
+            <!-- 超级管理员没有「删除」：服务端也会拒，这里不显示免得点出一个必然的失败 -->
+            <el-button
+              v-if="row.role !== 'superadmin'"
+              type="danger" link size="small"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -88,6 +94,22 @@ async function handleDisable(row) {
     ElMessage.success(`已${action}`)
     loadData(true)
   } catch { /* cancelled */ }
+}
+
+// 删除是不可恢复的，所以确认框里必须写清「和他的记录一起没」，而不是一句
+// 「确定删除吗」。删除失败的原因（当过审核人、进过快照）由服务端返回 409，
+// 消息本身就是解释，交给 api 拦截器弹出即可。
+async function handleDelete(row) {
+  try {
+    await ElMessageBox.confirm(
+      `将从系统中彻底删除 ${row.name}（${row.employeeId}），并同时删除他名下的积分申请、积分流水、累计积分、团队成员记录和季度评分数据。\n\n此操作不可恢复，也无法通过任何界面撤销。如果只是想让对方登不进来，请用「禁用」。`,
+      '彻底删除员工',
+      { type: 'error', confirmButtonText: '确认删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' }
+    )
+    await api.delete(`/admin/employees/${row.id}`)
+    ElMessage.success(`已删除 ${row.name}`)
+    loadData(true)
+  } catch { /* cancelled 或已由拦截器提示 */ }
 }
 </script>
 

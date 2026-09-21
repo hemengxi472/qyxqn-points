@@ -407,6 +407,83 @@ router.post('/employees/:id/disable', superAdminMiddleware, async (req, res) => 
   res.json({ success: true, status: newStatus });
 });
 
+// DELETE /api/admin/employees/:id — 彻底删除员工账号及其名下数据
+//
+// 和「禁用」是两回事：禁用只是登录不进来；这条是把人和记录一起抹掉，不可恢复。
+// 三个守卫都是为了不把别人或者审计链弄坏：
+//
+//   1. 不许删超级管理员 —— 可能删到一个不剩，后台再没人进得来。
+//   2. 当过「操作人」的（审核人 / 归零设置人 / 审计流水 actor / 统一任务创建人）
+//      不许删。这些列是 NOT NULL，指向的是「他对别人做过什么」：置空等于抹掉
+//      别人的审计链，跟着删又等于删别人的记录。都不对，所以直接拒绝并列明。
+//   3. 进过已锁定季度快照的不许删。快照是已公示、已报送人力资源部的排名，
+//      不因为人事变动而改 —— 那正是快照存在的意义。
+//
+// 作为「对象」的数据（他自己的提交、流水、积分、团队成员、季度分）随他一起删。
+router.delete('/employees/:id', superAdminMiddleware, async (req, res) => {
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ message: '员工不存在' });
+
+  if (user.role === 'superadmin') {
+    return res.status(403).json({ message: '不能删除超级管理员账号。如确需删除，请先把他降为普通员工。' });
+  }
+
+  const snapshot = await db.prepare(
+    'SELECT COUNT(*) AS cnt FROM quarterly_reward_snapshots WHERE user_id = ?'
+  ).get(user.id);
+  if (Number(snapshot.cnt) > 0) {
+    return res.status(409).json({
+      message: `${user.name} 已进入 ${snapshot.cnt} 份已锁定的季度排名快照（已公示/已报送），删除会让那份快照指向不存在的人。请改用「禁用」。`,
+      code: 'IN_LOCKED_SNAPSHOT'
+    });
+  }
+
+  const ACTOR_REFS = [
+    ['submissions', 'reviewer_id', '审核过的申请'],
+    ['groups', 'reviewer_id', '审核过的团队'],
+    ['fraud_records', 'reviewer_id', '录入的作假记录'],
+    ['monthly_tasks', 'created_by', '创建的统一任务'],
+    ['quarterly_dimension_status', 'set_by', '设置过的刚性归零'],
+    ['quarterly_score_log', 'actor_id', '季度审计流水']
+  ];
+  const blocks = [];
+  for (const [table, col, label] of ACTOR_REFS) {
+    const r = await db.prepare(`SELECT COUNT(*) AS cnt FROM ${table} WHERE ${col} = ?`).get(user.id);
+    if (Number(r.cnt) > 0) blocks.push(`${label} ${r.cnt} 条`);
+  }
+  if (blocks.length) {
+    return res.status(409).json({
+      message: `${user.name} 有操作人身份的数据（${blocks.join('、')}），删除会破坏审计链。请改用「禁用」。`,
+      code: 'HAS_ACTOR_DATA'
+    });
+  }
+
+  // 顺序无所谓（没有级联外键），列全了才不留悬空行。
+  const SUBJECT_TABLES = [
+    ['submissions', 'user_id'],
+    ['points_log', 'user_id'],
+    ['points_summary', 'user_id'],
+    ['group_members', 'user_id'],
+    ['fraud_records', 'user_id'],
+    ['monthly_points', 'user_id'],
+    ['quarterly_module_scores', 'user_id'],
+    ['quarterly_bonus_ledger', 'user_id'],
+    ['quarterly_dimension_status', 'user_id'],
+    ['quarterly_score_log', 'user_id']
+  ];
+
+  const deleted = {};
+  await trx(async (tx) => {
+    for (const [table, col] of SUBJECT_TABLES) {
+      const r = await tx.prepare(`DELETE FROM ${table} WHERE ${col} = ?`).run(user.id);
+      if (r.changes > 0) deleted[table] = r.changes;
+    }
+    await tx.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+  });
+
+  res.json({ success: true, name: user.name, deleted });
+});
+
 function formatSubmission(s) {
   return {
     id: s.id,
@@ -1172,6 +1249,44 @@ router.put('/modules/:id/toggle', async (req, res) => {
   const newState = mod.is_active ? 0 : 1;
   await db.prepare('UPDATE modules SET is_active = ? WHERE id = ?').run(newState, req.params.id);
   res.json({ success: true, isActive: !!newState });
+});
+
+// DELETE /api/admin/modules/:id — 删除一个评价维度及其子项
+//
+// 只允许删「没有任何历史记录指向它」的维度。submissions / points_log 里的
+// module_id 是历史分的来源，删掉维度行之后统计页会把这些分算丢，而那是员工
+// 实实在在挣过的。所以有引用就拒绝，让人改用「禁用」—— 停用的维度不出现在
+// 员工端，但历史还在。
+//
+// 子项（subcategories）是维度的组成部分，跟着一起删：留着就是悬空外键。
+router.delete('/modules/:id', superAdminMiddleware, async (req, res) => {
+  const mod = await db.prepare('SELECT * FROM modules WHERE id = ?').get(req.params.id);
+  if (!mod) return res.status(404).json({ message: '模块不存在' });
+
+  const subCount = Number((await db.prepare(
+    'SELECT COUNT(*) AS cnt FROM submissions WHERE module_id = ?'
+  ).get(mod.id)).cnt);
+  const logCount = Number((await db.prepare(
+    'SELECT COUNT(*) AS cnt FROM points_log WHERE module_id = ?'
+  ).get(mod.id)).cnt);
+
+  if (subCount > 0 || logCount > 0) {
+    return res.status(409).json({
+      message: `「${mod.name}」下还有 ${subCount} 条申请、${logCount} 条积分流水，删除会让这些历史分从统计里消失。请改用「禁用」。`,
+      code: 'HAS_HISTORY'
+    });
+  }
+
+  const subN = Number((await db.prepare(
+    'SELECT COUNT(*) AS cnt FROM subcategories WHERE module_id = ?'
+  ).get(mod.id)).cnt);
+
+  await trx(async (tx) => {
+    await tx.prepare('DELETE FROM subcategories WHERE module_id = ?').run(mod.id);
+    await tx.prepare('DELETE FROM modules WHERE id = ?').run(mod.id);
+  });
+
+  res.json({ success: true, name: mod.name, deletedSubcategories: subN });
 });
 
 // GET /api/admin/modules/:moduleId/subcategories
