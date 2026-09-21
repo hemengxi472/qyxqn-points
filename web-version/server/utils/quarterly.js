@@ -203,10 +203,19 @@ async function grantedBonus(db, userId, quarter, dimensionId) {
 }
 
 // 季度内的活跃员工（参与评分的对象）
+//
+// 三个条件缺一不可：
+//   status = 'active'          —— 禁用的人不该出现在排名里
+//   role = 'employee'          —— 管理员是评分的人，不是被评的人
+//   exclude_from_ranking = 0   —— 能登录但不参赛的账号（测试、借调）
+//
+// 这是排名范围的**唯一**定义：/admin/quarterly 和 /quarterly/ranking 都从这里取人，
+// 加条件只改这一处，两边的名单不会漂移。
 async function listScorableUsers(db) {
   return db.prepare(
     `SELECT id, employee_id, name, department FROM users
-      WHERE status = 'active' ORDER BY department, name`
+      WHERE status = 'active' AND role = 'employee' AND exclude_from_ranking = 0
+      ORDER BY department, name`
   ).all();
 }
 

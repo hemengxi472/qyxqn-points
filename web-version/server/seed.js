@@ -455,8 +455,26 @@ async function seed(db) {
 
   await seedNewCohort(db);
   await seedCohortGroups(db);
+  await seedRankingExclusions(db);
 
   console.log('数据库初始化完成');
+}
+
+// 保留的测试账号：要能登录走一遍员工端，但不该出现在季度排名里。
+//
+// 必须是每次启动都跑的 UPDATE，而不是塞进上面的建号 INSERT —— 线上这个账号
+// 早就存在了，改标志位得能作用到已有行（INSERT 那条路径在线上根本不会命中）。
+// 管理员账号不在这里：listScorableUsers 已经按 role 过滤掉了。
+const RANKING_EXCLUDED = ['12345678'];
+async function seedRankingExclusions(db) {
+  let n = 0;
+  for (const employeeId of RANKING_EXCLUDED) {
+    const r = await db.prepare(
+      'UPDATE users SET exclude_from_ranking = 1 WHERE employee_id = ? AND exclude_from_ranking = 0'
+    ).run(employeeId);
+    n += r.changes || 0;
+  }
+  if (n > 0) console.log(`已将 ${n} 个测试账号设为不参与季度排名`);
 }
 
 // ---------------------------------------------------------------------------

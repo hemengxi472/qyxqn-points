@@ -300,6 +300,7 @@ router.get('/employees', async (req, res) => {
       department: u.department,
       role: u.role,
       status: u.status,
+      excludeFromRanking: !!u.exclude_from_ranking,
       totalPoints: summary ? summary.total_points : 0,
       createdAt: u.created_at
     };
@@ -405,6 +406,26 @@ router.post('/employees/:id/disable', superAdminMiddleware, async (req, res) => 
     .run(newStatus, new Date().toISOString().replace('T', ' ').substring(0, 19), req.params.id);
 
   res.json({ success: true, status: newStatus });
+});
+
+// POST /api/admin/employees/:id/ranking — 切换「是否参与季度排名」
+//
+// 只影响季度评分名单和调休排名（utils/quarterly.js 的 listScorableUsers），
+// 不动这个人的登录、提交、积分和累计积分 —— 所以它是可逆的，和「禁用」「删除」
+// 都不同。管理员账号不需要手动设：listScorableUsers 已经按 role 过滤掉了。
+router.post('/employees/:id/ranking', superAdminMiddleware, async (req, res) => {
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ message: '员工不存在' });
+
+  if (user.role !== 'employee') {
+    return res.status(400).json({ message: '管理员本来就不参与排名，无需设置。' });
+  }
+
+  const next = user.exclude_from_ranking ? 0 : 1;
+  await db.prepare('UPDATE users SET exclude_from_ranking = ?, updated_at = ? WHERE id = ?')
+    .run(next, new Date().toISOString().replace('T', ' ').substring(0, 19), req.params.id);
+
+  res.json({ success: true, excludeFromRanking: !!next });
 });
 
 // DELETE /api/admin/employees/:id — 彻底删除员工账号及其名下数据

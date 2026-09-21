@@ -385,6 +385,10 @@ async function initDB() {
   // 审计流水的来源标记（'' = 人工，'fraud' = 弄虚作假归零）。用 ADD COLUMN 而不是
   // 重建表 —— type 的 CHECK 约束不需要动，不值得为它冒重建的不可逆风险。
   await addColumnIfMissing('quarterly_score_log', 'source', "TEXT NOT NULL DEFAULT ''");
+  // 不参与季度排名：给「能登录、但不是参赛对象」的账号用（测试账号、借调、
+  // 长期外派）。不能拿 status 代替 —— status 是登录闸门，置成 disabled/pending
+  // 会连人一起挡在门外（auth.js:30-35），而这类账号恰恰需要能登进来看。
+  await addColumnIfMissing('users', 'exclude_from_ranking', "INTEGER NOT NULL DEFAULT 0");
 
   // 索引沿用 CREATE INDEX IF NOT EXISTS 惯例（见上方月度层的写法），没有 helper。
   // groups.quarter 只建普通索引：一个季度本来就有多组。

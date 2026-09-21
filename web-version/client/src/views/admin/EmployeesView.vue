@@ -22,18 +22,26 @@
             <span v-else class="role-text">员工</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="80" align="center">
+        <el-table-column label="状态" width="150" align="center">
           <template #default="{ row }">
             <span class="status-dot" :class="row.status === 'active' ? 'dot-active' : 'dot-disabled'" />
             {{ row.status === 'active' ? '正常' : '禁用' }}
+            <!-- 「不参与排名」不是状态，人是正常的 —— 单列一枚标签，避免读成被停用 -->
+            <span v-if="row.excludeFromRanking" class="norank-tag">不排名</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="auth.isSuperAdmin" label="操作" width="240" align="center" fixed="right">
+        <el-table-column v-if="auth.isSuperAdmin" label="操作" width="320" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.role === 'employee'" type="primary" link size="small" @click="handlePromote(row)">提拔管理</el-button>
             <el-button type="danger" link size="small" @click="handleDisable(row)">
               {{ row.status === 'active' ? '禁用' : '启用' }}
             </el-button>
+            <!-- 管理员不在排名里是代码决定的，不给开关，免得设了没有效果 -->
+            <el-button
+              v-if="row.role === 'employee'"
+              type="warning" link size="small"
+              @click="handleRanking(row)"
+            >{{ row.excludeFromRanking ? '参与排名' : '不排名' }}</el-button>
             <!-- 超级管理员没有「删除」：服务端也会拒，这里不显示免得点出一个必然的失败 -->
             <el-button
               v-if="row.role !== 'superadmin'"
@@ -96,6 +104,24 @@ async function handleDisable(row) {
   } catch { /* cancelled */ }
 }
 
+// 「不参与排名」是可逆的，影响的只有季度评分名单和调休排名 —— 人照常登录、
+// 照常提交、累计积分照常涨。所以确认框要讲清它**不**做什么，否则会被当成禁用。
+async function handleRanking(row) {
+  const exiting = !row.excludeFromRanking
+  try {
+    await ElMessageBox.confirm(
+      exiting
+        ? `将把 ${row.name} 移出季度评分名单和调休排名。\n\n他能照常登录、提交积分申请，累计积分也不受影响；只是不再出现在季度排名里，也不会获得调休额度。`
+        : `将把 ${row.name} 重新纳入季度评分名单和调休排名。`,
+      exiting ? '设为不参与排名' : '恢复参与排名',
+      { type: 'warning' }
+    )
+    await api.post(`/admin/employees/${row.id}/ranking`)
+    ElMessage.success(exiting ? `已把 ${row.name} 移出排名` : `已恢复 ${row.name} 的排名`)
+    loadData(true)
+  } catch { /* cancelled 或已由拦截器提示 */ }
+}
+
 // 删除是不可恢复的，所以确认框里必须写清「和他的记录一起没」，而不是一句
 // 「确定删除吗」。删除失败的原因（当过审核人、进过快照）由服务端返回 409，
 // 消息本身就是解释，交给 api 拦截器弹出即可。
@@ -146,6 +172,13 @@ async function handleDelete(row) {
 }
 .dot-active { background: var(--status-approved); }
 .dot-disabled { background: var(--text-placeholder); }
+
+.norank-tag {
+  display: inline-block; margin-left: 6px;
+  font-size: 11px; font-weight: 600; line-height: 1.5;
+  padding: 1px 7px; border-radius: 10px;
+  background: var(--ink-100); color: var(--text-secondary);
+}
 
 .load-wrap { text-align: center; margin-top: 24px; }
 .load-btn { min-width: 160px; border-radius: var(--radius-md); height: 44px; }
