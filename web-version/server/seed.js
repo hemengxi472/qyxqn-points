@@ -494,6 +494,30 @@ async function seed(db) {
     console.log(`已有 ${existingEmployees} 个员工账号，跳过`);
   }
 
+  // 恢复"保留"测试账号（何孟溪 ABC）的可登录状态。
+  //
+  // 这个账号早期靠 status='disabled' 被挡在季度排名之外；后来加了
+  // exclude_from_ranking 专门干这件事（见 db.js 该列注释），但它在被禁用后一直
+  // 没被重新启用，导致现在连登录都被 auth.js:30-35 挡掉。而且它的密码哈希对不上
+  // 名册里登记的 123456（早期数据残留），光启用还不够，得一起重置。
+  //
+  // 系统没有任何改密码入口（auth 只有 login/register），所以把密码重置回登记值
+  // 不会覆盖谁的改动。每次启动幂等：只有状态不是 active、或密码对不上时才写。
+  // 其余 7 个废弃测试账号（hmx/user1~5/testuser）不在这里 —— 它们没有
+  // exclude_from_ranking，重新启用会把假人带进季度排名，保持禁用。
+  const kept = EMPLOYEES.find(e => e.employeeId === '12345678');
+  if (kept) {
+    const keptUser = await db.prepare(
+      'SELECT id, status, password_hash FROM users WHERE employee_id = ?'
+    ).get(kept.employeeId);
+    if (keptUser && !(keptUser.status === 'active' && bcrypt.compareSync(kept.password, keptUser.password_hash))) {
+      const keptHash = bcrypt.hashSync(kept.password, 10);
+      await db.prepare("UPDATE users SET status = 'active', password_hash = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(keptHash, keptUser.id);
+      console.log(`已恢复测试账号：${kept.name}（${kept.username} / ${kept.password}）`);
+    }
+  }
+
   await seedNewCohort(db);
   await seedCohortGroups(db);
   await seedRankingExclusions(db);
