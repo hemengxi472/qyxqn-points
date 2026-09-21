@@ -223,37 +223,8 @@
       </template>
     </el-dialog>
 
-    <!-- 示例数据。放在这一页是因为它灌的正是"每个子项得几次分"，和上面的分值
-         是同一件事的两端：分值决定一次值多少，示例数据决定得几次。
-         管理员即可见，后端也按 admin 拦。原先是只给 superadmin 看，但线上
-         账号的角色本机无从确认，卡片因此可能对管理员藏起来 —— 干脆放宽到 admin，
-         能改模块和子项分值的账号，本来就是被信任的。 -->
-    <div v-if="auth.isAdmin" class="demo-card">
-      <div class="dc-head">
-        <h4 class="dc-title">示例数据</h4>
-        <el-tag size="small" type="info" effect="plain">{{ demoQuarterLabel }}</el-tag>
-      </div>
-      <p class="dc-desc">
-        为参评员工生成本季度的申请与积分流水，让季度评分和排名有真实梯度。
-        记录内容与真实提交一致（真实评审意见、真实审核人），后台以不可见的来源标记
-        区分，随时可以一键清除。
-      </p>
-      <div v-if="demoStatus" class="dc-stats">
-        <span>示例申请 <b>{{ demoStatus.demoSubmissions }}</b> 条</span>
-        <span>参评 <b>{{ demoStatus.scorableUsers }}</b> 人</span>
-        <span>分数区间 <b>{{ demoStatus.minScore }} ~ {{ demoStatus.maxScore }}</b></span>
-        <span>0 分 <b>{{ demoStatus.zeroScoreUsers }}</b> 人</span>
-      </div>
-      <div class="dc-actions">
-        <el-button :loading="demoBusy" @click="loadDemoStatus">刷新状态</el-button>
-        <el-button type="primary" :loading="demoBusy" @click="handleDemoSeed">生成示例数据</el-button>
-        <el-button type="danger" plain :loading="demoBusy" @click="handleDemoCleanup">清除示例数据</el-button>
-      </div>
-      <p class="dc-warn">
-        生成会先清掉上一次生成的示例数据再重写；清除会把累计积分还原到生成之前的值。
-        两者都不影响真实审核产生的记录。
-      </p>
-    </div>
+    <!-- 示例数据卡片已按要求隐藏：后端的 /admin/demo/* 接口（生成/状态/清除）仍保留，
+         只是不再从模块管理页暴露入口。 -->
   </div>
 </template>
 
@@ -261,10 +232,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
-import { useAuthStore } from '../../stores/auth'
-import { quarterKey, formatQuarter } from '../../utils/quarter'
 
-const auth = useAuthStore()
 const modules = ref([])
 const subcategories = ref([])
 const loading = ref(false)
@@ -302,72 +270,7 @@ const baseScoreMismatch = computed(() => {
 
 onMounted(() => {
   loadModules()
-  if (auth.isAdmin) loadDemoStatus()
 })
-
-// ===== 示例数据 =====
-//
-// 后端的 /api/admin/demo 是把 scripts/demo-participation.js 搬到了 HTTP 上：
-// 线上库是 Turso，连接凭据只在 Render 的环境变量里，本机跑不了那个脚本，
-// 所以"给线上灌演示数据"只能由服务端自己来做。
-const demoQuarter = ref(quarterKey())
-const demoQuarterLabel = computed(() => formatQuarter(demoQuarter.value))
-const demoStatus = ref(null)
-const demoBusy = ref(false)
-
-async function loadDemoStatus() {
-  try {
-    const d = await api.get('/admin/demo/status', { params: { quarter: demoQuarter.value } })
-    demoStatus.value = d.summary
-  } catch { /* 拦截器已提示 */ }
-}
-
-// 生成会比较久（服务端要写入上千条记录），所以按钮一直转、并且明确告诉用户在等。
-async function handleDemoSeed() {
-  try {
-    await ElMessageBox.confirm(
-      `将为 ${demoQuarterLabel.value} 的参评员工生成示例申请与积分流水。\n\n` +
-      '会先清除上一次生成的示例数据再重写，真实审核产生的记录不受影响。' +
-      '数据量较大，请等页面提示完成，中途不要重复点击。',
-      '生成示例数据',
-      { type: 'warning', confirmButtonText: '开始生成' }
-    )
-  } catch { return }
-
-  demoBusy.value = true
-  try {
-    const d = await api.post(`/admin/demo/seed?quarter=${demoQuarter.value}`)
-    const r = d.result || {}
-    ElMessage.success(
-      `已生成：申请 ${r.submissions} 条，参评 ${r.scorableUsers} 人` +
-      (r.nonParticipants?.length ? `，其中 ${r.nonParticipants.length} 人未参与（0 分）` : '')
-    )
-    await loadDemoStatus()
-    await loadModules()
-  } catch { /* 拦截器已提示 */ } finally { demoBusy.value = false }
-}
-
-// 清除是不可逆的（累计积分会整行还原），所以确认框写清它恢复的是什么。
-async function handleDemoCleanup() {
-  try {
-    await ElMessageBox.confirm(
-      `将清除 ${demoQuarterLabel.value} 的全部示例数据（申请、积分流水、季度流水），` +
-      '并把相关人员的累计积分还原到生成之前的值。\n\n' +
-      '真实审核产生的记录不会被删除；但如果生成期间有人真的审核过、' +
-      '或者有作假记录，那部分对累计积分的改动也会一并被还原，需要单独补录。',
-      '清除示例数据',
-      { type: 'error', confirmButtonText: '确认清除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' }
-    )
-  } catch { return }
-
-  demoBusy.value = true
-  try {
-    await api.post(`/admin/demo/cleanup?quarter=${demoQuarter.value}`)
-    ElMessage.success('示例数据已清除')
-    await loadDemoStatus()
-    await loadModules()
-  } catch { /* 拦截器已提示 */ } finally { demoBusy.value = false }
-}
 
 // silent = 保住当前列表，不闪一次整页 spinner（保存子项后的刷新走这条路）
 async function loadModules(silent = false) {
@@ -571,33 +474,6 @@ async function toggleSub(sub) {
 .form-row.three { grid-template-columns: repeat(3, 1fr); }
 .form-hint { font-size: 11px; color: var(--text-placeholder); line-height: 1.6; margin-top: 4px; }
 
-/* 示例数据卡片。视觉上刻意比模块卡片轻：它是运维操作，不是评价体系的配置项，
-   不该和上面的维度/子项抢注意力。 */
-.demo-card {
-  margin-top: 24px;
-  padding: 18px 22px;
-  background: var(--bg-card);
-  border: 1px dashed var(--ink-200);
-  border-radius: var(--radius-lg);
-}
-.dc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.dc-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
-.dc-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px; }
-.dc-desc code {
-  font-size: 12px; padding: 1px 5px; border-radius: 4px;
-  background: var(--ink-100); color: var(--text-primary);
-}
-.dc-stats {
-  display: flex; flex-wrap: wrap; gap: 18px;
-  font-size: 12px; color: var(--text-secondary);
-  padding: 10px 14px; margin-bottom: 12px;
-  background: var(--ink-50, var(--ink-100));
-  border-radius: var(--radius-md);
-}
-.dc-stats b { color: var(--primary); font-size: 14px; }
-.dc-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.dc-warn { font-size: 11px; color: var(--text-placeholder); line-height: 1.7; margin-top: 12px; }
-
 @media (max-width: 768px) {
   .module-card { padding: 16px 18px; }
   .mc-header { flex-wrap: wrap; gap: 10px; }
@@ -605,7 +481,5 @@ async function toggleSub(sub) {
   .sub-card { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
   .sc-info { flex: 1; min-width: 0; }
   .sc-name { font-size: 13px; }
-  .demo-card { padding: 16px; }
-  .dc-stats { gap: 12px; }
 }
 </style>
