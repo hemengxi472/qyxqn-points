@@ -9,9 +9,6 @@ const { formatQuarter, monthKey } = require('./utils/quarter');
 // 六个维度各自模块的基础分精确加总为 100，这是映射正确性的判据，
 // 由文件末尾的 assertBaseScores() 在每次种子后校验。
 //
-// 每个模块的 points（参考加分/次）一律置 0：语义已变为"参考加分"，
-// 给个猜测值会看起来像权威的单次加分额，而它并不一定被维度加分上限承认。
-//
 // 子项的 bonusCap（加分上限）取自 表2 该子项**自己**那条加分细则的分值：
 //   有健康  10 / 0        表2 写了"一次性得 10 分，不拆分计分"；心理健康无加分项
 //   有本领  10 / 10 / 10  表2 只给了池子"按项累计，最高 10 分"，池值照写到每一项
@@ -24,6 +21,18 @@ const { formatQuarter, monthKey } = require('./utils/quarter');
 // 这是**展示值**：真正生效的封顶始终是维度的 bonusCap（见 utils/quarterly.js 的
 // bonusApplied 和 admin.js 审核时的 BONUS_CAP_EXCEEDED 校验）。子项值抄成维度值
 // 会让员工端把"每项都能拿满 60"读成制度。改了子项值不必同步算法。
+//
+// 子项的 points（参考加分 / 次）取自 表2 该子项那条加分细则的**每次分值**：
+//   有健康  10 / 10       身体健康「一次性得 10 分」；心理健康表2 无加分条款，酌情 10
+//   有本领  10 / 10 / 10  表2 三句都是「按项累计」，逐项 10
+//   有成长  10 / 10 / 10  表2 六类事项共用一个 60 分池 → 每项 10
+//   有智慧  10 / 10 / 10  表2 三句都是「+10 分/项」
+//   有担当  15 / 10 / 5   表2 三句细则，按排列顺序对应三个子项
+//   有纪律  10 / 10 / 5   表2 两句各 +10；自我管理只有扣分、无加分条款，酌情 5
+//
+// 这是**员工端展示值 + 提交页的默认分值**：数值必须非 0，否则界面上就是一枚
+// 「0分」徽章，等于没有分值（这正是它一直以来的样子）。实际给多少仍由审核人填，
+// 上限由 admin.js 的 BONUS_CAP_EXCEEDED 按维度天花板把关。
 // ---------------------------------------------------------------------------
 
 const DIMENSIONS = [
@@ -43,6 +52,7 @@ const DIMENSIONS = [
       {
         name: '身体健康',
         baseScore: 60,
+        points: 10,
         scoreRule: '按月度打卡折算季度得分；包含步数达标、专项运动、工位拉伸、规律饮水、周末户外运动，未达标扣对应分值',
         bonusRule: '上限 10 分：3 人及以上小组季度共同健康打卡≥2 次，一次性得 10 分，不拆分计分',
         bonusCap: 10,
@@ -53,6 +63,7 @@ const DIMENSIONS = [
       {
         name: '心理健康',
         baseScore: 40,
+        points: 10,
         scoreRule: '完成情绪复盘、兴趣疗愈、正向倾诉、月度小目标；心态消极不主动调节酌情扣分',
         bonusRule: '',
         bonusCap: 0,
@@ -78,6 +89,7 @@ const DIMENSIONS = [
       {
         name: '专业扎实',
         baseScore: 40,
+        points: 10,
         scoreRule: '完成高难度一次性验收任务；复盘报告被部门采纳；纠正业务错误；技能考核前 30%，按完成情况得分',
         bonusRule: '上限 10 分：专业扎实、高效执行、跨界学习类事项按项累计，最高 10 分',
         bonusCap: 10,
@@ -88,6 +100,7 @@ const DIMENSIONS = [
       {
         name: '高效执行',
         baseScore: 35,
+        points: 10,
         scoreRule: '任务提前 20% 交付；承接棘手紧急任务；完成流程优化；季度无逾期拖延，未达标扣分',
         bonusRule: '上限 10 分：专业扎实、高效执行、跨界学习类事项按项累计，最高 10 分',
         bonusCap: 10,
@@ -98,6 +111,7 @@ const DIMENSIONS = [
       {
         name: '跨界学习',
         baseScore: 25,
+        points: 10,
         scoreRule: '学习其他岗位技能并落地；跨部门协作输出总结；向同事分享工具方法；取得外部课程结业证明',
         bonusRule: '上限 10 分：专业扎实、高效执行、跨界学习类事项按项累计，最高 10 分',
         bonusCap: 10,
@@ -123,6 +137,7 @@ const DIMENSIONS = [
       {
         name: '持续成长',
         baseScore: 40,
+        points: 10,
         scoreRule: '完成个人成长地图、学习存折打卡；参与跨岗挑战赛、业务前沿分享；季度目标落地情况',
         bonusRule: '上限 60 分：成长导师认证、内训分享、跨部门项目、逆商故事投稿、同事实名表扬、打卡全完成，按规则累计，上限 60 分',
         bonusCap: 60,
@@ -133,6 +148,7 @@ const DIMENSIONS = [
       {
         name: '自信自强',
         baseScore: 30,
+        points: 10,
         scoreRule: '参与高光复盘；完成勇气清单突破任务；参与极限挑战日，结合同伴互评打分',
         bonusRule: '上限 60 分：成长导师认证、内训分享、跨部门项目、逆商故事投稿、同事实名表扬、打卡全完成，按规则累计，上限 60 分',
         bonusCap: 60,
@@ -143,6 +159,7 @@ const DIMENSIONS = [
       {
         name: '品质修养',
         baseScore: 30,
+        points: 10,
         scoreRule: '参与辩论赛、换位一封信；参与靠谱指数匿名互评，参与不足扣分',
         bonusRule: '上限 60 分：成长导师认证、内训分享、跨部门项目、逆商故事投稿、同事实名表扬、打卡全完成，按规则累计，上限 60 分',
         bonusCap: 60,
@@ -168,6 +185,7 @@ const DIMENSIONS = [
       {
         name: '全局思维',
         baseScore: 40,
+        points: 10,
         scoreRule: '学习战略业务文件输出洞察；提出合理化改进建议；无个人思考酌情扣分',
         bonusRule: '上限 30 分：建议落地采纳 +10 分/项；攻坚案例推广 +10 分/篇；落地创新成果 +10 分/项，累计最高 30 分，无落地凭证不计分',
         bonusCap: 10,
@@ -178,6 +196,7 @@ const DIMENSIONS = [
       {
         name: '职业规划',
         baseScore: 30,
+        points: 10,
         scoreRule: '季度更新职业规划；复盘目标差距；完成导师成长访谈',
         bonusRule: '上限 30 分：建议落地采纳 +10 分/项；攻坚案例推广 +10 分/篇；落地创新成果 +10 分/项，累计最高 30 分，无落地凭证不计分',
         bonusCap: 10,
@@ -188,6 +207,7 @@ const DIMENSIONS = [
       {
         name: '难题破解',
         baseScore: 30,
+        points: 10,
         scoreRule: '拆解复杂业务输出可行方案；案例研讨贡献新思路',
         bonusRule: '上限 30 分：建议落地采纳 +10 分/项；攻坚案例推广 +10 分/篇；落地创新成果 +10 分/项，累计最高 30 分，无落地凭证不计分',
         bonusCap: 10,
@@ -213,6 +233,7 @@ const DIMENSIONS = [
       {
         name: '岗位履职担当',
         baseScore: 40,
+        points: 15,
         scoreRule: '保质完成本职；主动承接急难补位、专项攻坚；推诿退缩扣分',
         bonusRule: '上限 30 分：牵头专项攻坚 +15 分；应急任务表现突出 +10 分；客户 / 部门正向评价 +5 分，累计最高 30 分；仅列席无实际参与不计分',
         bonusCap: 15,
@@ -223,6 +244,7 @@ const DIMENSIONS = [
       {
         name: '团队协同担当',
         baseScore: 35,
+        points: 10,
         scoreRule: '配合团队目标、协助同事；跨项目按时交付；协作消极扣分',
         bonusRule: '上限 30 分：牵头专项攻坚 +15 分；应急任务表现突出 +10 分；客户 / 部门正向评价 +5 分，累计最高 30 分；仅列席无实际参与不计分',
         bonusCap: 10,
@@ -233,6 +255,7 @@ const DIMENSIONS = [
       {
         name: '青年志愿担当',
         baseScore: 25,
+        points: 5,
         scoreRule: '参加团日、突击队、志愿服务；缺席重要集体任务扣分',
         bonusRule: '上限 30 分：牵头专项攻坚 +15 分；应急任务表现突出 +10 分；客户 / 部门正向评价 +5 分，累计最高 30 分；仅列席无实际参与不计分',
         bonusCap: 5,
@@ -258,6 +281,7 @@ const DIMENSIONS = [
       {
         name: '合规纪律',
         baseScore: 45,
+        points: 10,
         scoreRule: '参加合规、信息安全、廉洁学习并完成测试；出现风险隐患予以扣分',
         bonusRule: '上限 20 分：合规宣讲分享 +10 分/次；主动上报核实风险 +10 分/次，合计上限 20 分。刚性扣罚：违纪 / 泄密 / 弄虚作假本维度直接 0 分，取消季度奖励资格',
         bonusCap: 10,
@@ -268,6 +292,7 @@ const DIMENSIONS = [
       {
         name: '职业操守',
         baseScore: 35,
+        points: 10,
         scoreRule: '恪守职业准则，如实反馈工作；弄虚作假视情节大幅扣分',
         bonusRule: '上限 20 分：合规宣讲分享 +10 分/次；主动上报核实风险 +10 分/次，合计上限 20 分。刚性扣罚：违纪 / 泄密 / 弄虚作假本维度直接 0 分，取消季度奖励资格',
         bonusCap: 10,
@@ -278,6 +303,7 @@ const DIMENSIONS = [
       {
         name: '自我管理',
         baseScore: 20,
+        points: 5,
         scoreRule: '遵守考勤；按时填报平台材料；无故缺勤、逾期报送扣分',
         // 表2 的加分栏只给了「合规宣讲分享」「主动上报核实风险」两条，都落在前两个
         // 子项上；自我管理只有扣分项，所以加分上限是 0（原来是照抄维度的 20）。
@@ -325,9 +351,9 @@ async function seed(db) {
             `INSERT INTO subcategories
                (module_id, name, description, points, max_times, requires_photo, sort_order, is_active,
                 base_score, score_rule, bonus_rule, bonus_cap, theme_activity, evidence_required)
-             VALUES (?, ?, ?, 0, 0, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
+             VALUES (?, ?, ?, ?, 0, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
           ).run(
-            moduleId, m.name, m.scoreRule, m.requiresPhoto, i + 1,
+            moduleId, m.name, m.scoreRule, m.points, m.requiresPhoto, i + 1,
             m.baseScore, m.scoreRule, m.bonusRule, m.bonusCap,
             JSON.stringify(m.themeActivities), m.evidence
           );
@@ -391,11 +417,11 @@ async function seed(db) {
             if (SEED_FORCE) {
               await tx.prepare(
                 `UPDATE subcategories SET is_active = 1, requires_photo = ?, sort_order = ?,
-                   base_score = ?, score_rule = ?, bonus_rule = ?, bonus_cap = ?,
+                   base_score = ?, points = ?, score_rule = ?, bonus_rule = ?, bonus_cap = ?,
                    theme_activity = ?, evidence_required = ?, description = ?
                  WHERE id = ?`
               ).run(
-                m.requiresPhoto, i + 1, m.baseScore, m.scoreRule, m.bonusRule,
+                m.requiresPhoto, i + 1, m.baseScore, m.points, m.scoreRule, m.bonusRule,
                 m.bonusCap, JSON.stringify(m.themeActivities), m.evidence,
                 m.scoreRule, existing.id
               );
@@ -407,9 +433,9 @@ async function seed(db) {
               `INSERT INTO subcategories
                  (module_id, name, description, points, max_times, requires_photo, sort_order, is_active,
                   base_score, score_rule, bonus_rule, bonus_cap, theme_activity, evidence_required)
-               VALUES (?, ?, ?, 0, 0, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
+               VALUES (?, ?, ?, ?, 0, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
             ).run(
-              moduleId, m.name, m.scoreRule, m.requiresPhoto, i + 1,
+              moduleId, m.name, m.scoreRule, m.points, m.requiresPhoto, i + 1,
               m.baseScore, m.scoreRule, m.bonusRule, m.bonusCap,
               JSON.stringify(m.themeActivities), m.evidence
             );
@@ -644,6 +670,15 @@ async function assertBaseScores(db) {
         `[维度校验] 「${modRow.name}」模块基础分合计 ${sum} ≠ 维度基础分 ${modRow.base_score}，请检查模块配置`
       );
     }
+  }
+
+  // 子项分值不能是 0：员工端把它渲染成「0分」徽章，等于告诉员工这一项不值分。
+  // db.js 的 SUB_POINT_FIX 会为存量库补上，这里守住全新库和后续误改。
+  const zero = await db.prepare(
+    'SELECT COUNT(*) AS n FROM subcategories WHERE is_active = 1 AND points = 0'
+  ).get();
+  if (Number(zero.n) > 0) {
+    console.warn(`[分值校验] 有 ${zero.n} 个子项的参考加分是 0，员工端会显示「0分」徽章，请检查配置`);
   }
 }
 

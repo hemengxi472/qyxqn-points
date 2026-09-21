@@ -52,12 +52,13 @@
     </div>
 
     <!-- 本季度评价维度 -->
-    <!-- 注意：这是与"累计积分"完全不同的一种尺度，季度每季重置回基础分。
-         两个数绝不能相加或合并展示 —— 一个人可以季度 95 分而累计 0 分。 -->
+    <!-- 注意：这是与"累计积分"完全不同的一种尺度。季度分按当季实际参与累计，
+         季初不送基础分（累加制），所以没参加任何活动的人这里是 0 分。
+         两个数绝不能相加或合并展示 —— 一个人可以季度 0 分而累计 300 分。 -->
     <div v-if="quarterly" class="section">
       <div class="section-header">
         <h3 class="section-title">📊 本季度评价维度</h3>
-        <span class="section-hint">{{ formatQuarter(quarterly.quarter) }} · 满分 {{ quarterly.maxScore }}</span>
+        <span class="section-hint">{{ formatQuarter(quarterly.quarter) }} · 上限 {{ quarterly.maxScore }}</span>
       </div>
 
       <div class="quarter-banner" :class="{ ineligible: !quarterly.eligible }">
@@ -93,8 +94,11 @@
             </div>
             <div class="mc-info">
               <span class="mc-name">{{ d.name }}</span>
-              <span class="mc-points">{{ d.score }} <small>/ {{ d.baseTotal + d.bonusCap }}</small></span>
-              <span class="mc-bonus">加分 {{ d.bonusApplied }}/{{ d.bonusCap }}</span>
+              <span class="mc-points">{{ d.score }} <small>/ {{ d.ceiling }}</small></span>
+              <!-- 累加制下绝大多数人拿不到基础分 100 以上，所以"加分 0/10"这种
+                   常态文案没有信息量。超出部分才叫加分，没超出就直接显示已得。 -->
+              <span v-if="d.bonusApplied > 0" class="mc-bonus">含加分 {{ d.bonusApplied }}/{{ d.bonusCap }}</span>
+              <span v-else class="mc-bonus">已得 {{ d.earned }} 分</span>
             </div>
           </div>
           <el-tooltip v-if="d.hardZero" :content="d.hardZeroReason || '该维度已刚性归零'" placement="top">

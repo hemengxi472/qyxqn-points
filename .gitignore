@@ -8,3 +8,6 @@ dist/
 .env
 .DS_Store
 Thumbs.db
+
+# 演示样本数据的还原备份（scripts/demo-participation.js 生成，含真实累计积分）
+**/scripts/.demo-backup.json

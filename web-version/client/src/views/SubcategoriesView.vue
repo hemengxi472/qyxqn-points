@@ -39,9 +39,10 @@
             <span v-if="sub.maxTimes > 0" class="sub-limit">每年限 {{ sub.maxTimes }} 次</span>
           </div>
           <div class="sub-points-box">
-            <!-- baseScore = 季度基础分，points = 参考加分/次。两个不同的数，
-                 不要合并成"X 分"一个数字展示。 -->
-            <span class="sub-base">基础分 {{ sub.baseScore }}</span>
+            <!-- baseScore = 本项上限，points = 参考加分/次。两个不同的数，
+                 不要合并成"X 分"一个数字展示。
+                 累加制下季初不送分，所以这里不能写"基础分"（会被读成默认就有）。 -->
+            <span class="sub-base">本项上限 {{ sub.baseScore }}</span>
             <span class="sub-points">{{ sub.points }}</span>
             <span class="sub-unit">参考加分 / 次</span>
           </div>

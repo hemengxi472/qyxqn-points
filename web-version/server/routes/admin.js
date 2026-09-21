@@ -3,7 +3,7 @@ const { db, trx } = require('../db');
 const { authMiddleware, adminMiddleware, superAdminMiddleware } = require('../middleware/auth');
 const { monthKey, quarterKey, quarterOfMonth, isValidQuarter, quarterBounds, formatQuarter } = require('../utils/quarter');
 const { resolveDisciplineModule } = require('../utils/dimensions');
-const { buildQuarterlyScores, listScorableUsers, grantedBonus } = require('../utils/quarterly');
+const { buildQuarterlyScores, listScorableUsers, dimensionEarned, dimensionCeiling } = require('../utils/quarterly');
 const {
   leaveDaysForRank, REWARD_TIERS, REWARD_USAGE_NOTE, REWARD_PROCESS, REWARD_IMPORTANT_NOTE
 } = require('../utils/reward');
@@ -54,13 +54,17 @@ router.get('/reviews/:id', async (req, res) => {
 
   // 审核人看到的剩余额度。服务端校验才是准绳，这里只是让「填了 200 才被拒」
   // 少发生 —— 输入框的 :max 绑的就是 remaining。
-  const dim = await db.prepare('SELECT id, name, bonus_cap, has_hard_zero FROM modules WHERE id = ?')
+  const dim = await db.prepare('SELECT id, name, base_score, bonus_cap, has_hard_zero FROM modules WHERE id = ?')
     .get(submission.module_id);
 
   let bonusContext = null;
-  if (dim && Number(dim.bonus_cap) > 0) {
+  // 累加制下额度按**维度上限**（100 + 加分上限）算，不再是只看 bonus_cap。
+  // 守卫用 ceiling > 0 而不是 bonus_cap > 0：管理员把加分上限调成 0 时，
+  // ceiling 仍是 100 的合法区间，用旧的判据会把整块额度视图静默藏掉。
+  if (dim && dimensionCeiling(dim) > 0) {
     const quarter = submission.quarter || quarterOfMonth(submission.month_year);
-    const granted = quarter ? await grantedBonus(db, submission.user_id, quarter, dim.id) : 0;
+    const earned = quarter ? await dimensionEarned(db, submission.user_id, quarter, dim.id) : 0;
+    const ceiling = dimensionCeiling(dim);
     const status = quarter ? await db.prepare(
       `SELECT hard_zero, reason FROM quarterly_dimension_status
         WHERE user_id = ? AND quarter = ? AND dimension_id = ?`
@@ -76,9 +80,13 @@ router.get('/reviews/:id', async (req, res) => {
     bonusContext = {
       quarter,
       dimensionName: dim.name,
+      baseScore: Number(dim.base_score) || 0,
       bonusCap: Number(dim.bonus_cap),
-      granted,
-      remaining: Math.max(0, Number(dim.bonus_cap) - granted),
+      ceiling,
+      // earned / remaining 现在都是「维度上限」口径。字段名保持 granted 是为了
+      // 不破坏已有客户端读取；它的语义已从「已用加分」变成「本维度已得」。
+      granted: earned,
+      remaining: Math.max(0, ceiling - earned),
       hasHardZero: !!dim.has_hard_zero,
       hardZero: !!(status && status.hard_zero),
       hardZeroReason: status ? (status.reason || '') : '',
@@ -114,8 +122,10 @@ router.post('/reviews/:id/action', async (req, res) => {
 
   const reviewer = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
 
-  // 该维度配了加分上限才做封顶校验；遗留模块（bonus_cap=0）行为与以前完全一致
-  const dim = await db.prepare('SELECT id, name, bonus_cap FROM modules WHERE id = ?').get(sub.module_id);
+  // 累加制下的封顶校验：额度是**维度上限**（基础分 100 + 加分上限），不是加分上限。
+  // 遗留模块（base_score / bonus_cap 都是 0）在下面用 ceiling > 0 挡掉，行为与以前一致。
+  const dim = await db.prepare('SELECT id, name, base_score, bonus_cap FROM modules WHERE id = ?')
+    .get(sub.module_id);
   const quarter = sub.quarter || quarterOfMonth(sub.month_year);
 
   try {
@@ -125,12 +135,17 @@ router.post('/reviews/:id/action', async (req, res) => {
       if (action === 'approve') {
         // 上限校验必须在事务内：同人同季度同维度的两个并发审核若在事务外读已用量，
         // 会读到同样的值而双双通过。
-        if (dim && Number(dim.bonus_cap) > 0 && quarter) {
-          const granted = await grantedBonus(tx, sub.user_id, quarter, dim.id);
-          const remaining = Math.max(0, Number(dim.bonus_cap) - granted);
+        //
+        // 判据是 ceiling > 0 而不是 bonus_cap > 0：加分上限被管理员调成 0 时，
+        // ceiling 仍是 100，那是个合法的可加分区间，用旧判据会把它整个跳过。
+        if (dim && quarter && dimensionCeiling(dim) > 0) {
+          const ceiling = dimensionCeiling(dim);
+          const earned = await dimensionEarned(tx, sub.user_id, quarter, dim.id);
+          const remaining = Math.max(0, ceiling - earned);
           if (p > remaining) {
             throw Object.assign(new Error(
-              `本季度「${dim.name}」附加加分上限 ${dim.bonus_cap} 分，已使用 ${granted} 分，本次最多可加 ${remaining} 分`
+              `本季度「${dim.name}」已达上限 ${ceiling} 分（基础 ${dim.base_score} + 加分上限 ${dim.bonus_cap}），` +
+              `当前已得 ${earned} 分，本次最多可加 ${remaining} 分`
             ), { status: 400, code: 'BONUS_CAP_EXCEEDED' });
           }
         }
@@ -717,9 +732,10 @@ router.post('/groups/:id/review', async (req, res) => {
         }
         awarded++;
 
-        // source='team_task' 是团队任务分在算分路径上的唯一判别特征 ——
-        // quarterly.js 的 bonusMap 和 grantedBonus 都按它把 5 分折进「有纪律」
-        // 的加分上限。漏写这一列，团队任务分就会从季度分里静默消失。
+        // source='team_task' 保留为判别特征（审计、演示数据清理都用得上），
+        // 但算分已不再依赖它：quarterly.js 现在是按 quarter + module_id 汇总
+        // points_log 的签名净额，团队任务行天然被覆盖。仍然要写对 quarter，
+        // 写错季度这 5 分会落到别的季度去。
         await tx.prepare(`
           INSERT INTO points_log (user_id, employee_id, submission_id, module_id, module_name,
             subcategory_name, points, type, description, month_year, quarter, source)
@@ -728,8 +744,8 @@ router.post('/groups/:id/review', async (req, res) => {
           `团队任务完成 - ${group.name}`, monthKey(), taskQuarter || '');
 
         // 刻意不写 quarterly_bonus_ledger：一次团队审核给全队 N 人各发 5 分，
-        // 而 ledger 有 UNIQUE(submission_id)，第 2 个人就会被拒。团队任务的
-        // 季度加分走派生（见 quarterly.js 的 TEAM_TASK_BONUS_WHERE）。
+        // 而 ledger 有 UNIQUE(submission_id)，第 2 个人就会被拒。既然 ledger
+        // 已不参与算分（points_log 才是唯一输入），这里不写不影响那 5 分入账。
 
         const summary = await tx.prepare('SELECT * FROM points_summary WHERE user_id = ?').get(m.user_id);
         if (!summary) {
@@ -1571,8 +1587,10 @@ router.get('/quarterly/ranking', async (req, res) => {
 
 // PUT /api/admin/quarterly/score — 录入某模块的扣分
 //
-// 只接受扣分，不接受得分：模块基础分是满分（季初默认满分，管理员录扣分）。
-// base_score 在此快照落库，防止后台改基础分回写历史季度。
+// 只接受扣分，不接受得分：得分一律来自审核通过的申请（points_log），人工只能扣。
+// 累加制下扣分是**可选的补充手段**（表2 的「未达标扣对应分值」等条款），不再是
+// 季初默认满分、逐项往下扣的主机制。
+// base_score 在此快照落库，防止后台改子项上限回写历史季度。
 router.put('/quarterly/score', async (req, res) => {
   const { userId, quarter, moduleId, deduction, reason } = req.body;
   if (!isValidQuarter(quarter)) return res.status(400).json({ message: '季度格式无效，应为 YYYY-QN' });
@@ -1590,9 +1608,13 @@ router.put('/quarterly/score', async (req, res) => {
   const mod = await db.prepare('SELECT * FROM subcategories WHERE id = ?').get(moduleId);
   if (!mod) return res.status(404).json({ message: '模块不存在' });
 
+  // 单项扣分的上限按该子项在 100 分里的份额（subcategories.base_score）算 ——
+  // 累加制下它不再是"季初默认拿到的分"，但作为**本项权重**仍是合理的扣分封顶。
+  // 维度层面的天花板由 quarterly.js 的 min(…, 100 + 加分上限) 兜底，
+  // 扣超了会被 max(0, …) 夹到 0，不会扣出负分。
   if (d > Number(mod.base_score || 0)) {
     return res.status(400).json({
-      message: `该模块基础分 ${mod.base_score} 分，扣分不能超过基础分`
+      message: `该模块上限 ${mod.base_score} 分，扣分不能超过本项上限`
     });
   }
 
@@ -1634,7 +1656,11 @@ router.put('/quarterly/score', async (req, res) => {
 
   res.json({
     success: true,
-    moduleScore: Math.max(0, Number(mod.base_score || 0) - d),
+    // 本项已得（累加制下不再有"基础分减扣分"这个数）。客户端拿它只作即时反馈，
+    // 真正的刷新走随后的 load()。字段名保持 moduleScore，避免破坏已有读取方。
+    moduleScore: Math.max(0, Number(
+      (dim && dim.modules.find(m => m.moduleId === mod.id) || {}).earned || 0
+    )),
     dimension: dim || null,
     quarterly: me || null
   });

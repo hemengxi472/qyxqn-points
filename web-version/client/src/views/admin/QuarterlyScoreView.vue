@@ -45,7 +45,7 @@
                  不同的总分。以前只差几分不容易察觉，作假归零会把它放大成
                  760 → 0，所以必须在表头写明以哪张为准。 -->
             <span v-if="locked" class="panel-sub live-warn">实时分，仅供参考，以快照为准</span>
-            <span v-else class="panel-sub">每个维度满分 100 基础分 + 附加加分，季度总分满分 {{ maxScore }}</span>
+            <span v-else class="panel-sub">按当季实际参与累计：每个维度上限 100 基础分 + 加分上限，季度总分上限 {{ maxScore }}</span>
           </div>
         </template>
 
@@ -259,12 +259,22 @@
 
         <el-table :data="drawerDim.modules" size="small" style="width:100%">
           <el-table-column prop="moduleName" label="模块" min-width="130" />
-          <el-table-column label="基础分" width="80" align="center">
+          <el-table-column label="本项上限" width="80" align="center">
             <template #default="{ row }">{{ row.baseScore }}</template>
+          </el-table-column>
+          <el-table-column label="本项已得" width="100" align="center">
+            <template #default="{ row }">
+              <span class="mod-score">
+                {{ Math.max(0, row.net - (deductionDraft[row.moduleId] ?? row.deduction)) }}
+              </span>
+            </template>
           </el-table-column>
           <el-table-column label="扣分" width="120" align="center">
             <template #default="{ row }">
-              <!-- 作假归零期间服务端会拒收扣分（409）：录进去也看不见，
+              <!-- 上限绑本项上限（= row.baseScore）而不是维度上限：服务端 PUT
+                   /quarterly/score 就是按这个数拒的（"扣分不能超过本项上限"）。
+                   绑宽了只会让人填完拿一个 400。维度天花板由公式兜底，不在这里拦。
+                   作假归零期间服务端会拒收扣分（409）：录进去也看不见，
                    等作假撤销时才突然生效。直接禁用，理由在上面的 alert 里。 -->
               <el-input-number
                 v-model="deductionDraft[row.moduleId]"
@@ -277,30 +287,31 @@
               />
             </template>
           </el-table-column>
-          <el-table-column label="本模块得分" width="100" align="center">
-            <template #default="{ row }">
-              <span class="mod-score">
-                {{ Math.max(0, row.baseScore - (deductionDraft[row.moduleId] ?? row.deduction)) }}
-              </span>
-            </template>
-          </el-table-column>
         </el-table>
+
+        <!-- 累加制下"本项已得"只能按子项名称归集（points_log 没有子项 id），
+             名字对不上在用子项的历史行会落在明细之外，所以它不一定加得回维度合计。 -->
+        <p class="drawer-note">本项已得按子项名称归集，可能与维度合计有差异，以维度合计为准。</p>
 
         <div class="drawer-summary">
           <div class="ds-row">
-            <span>模块得分小计</span>
-            <strong>{{ draftModuleBaseTotal }}</strong>
+            <span>本维度已得</span>
+            <strong>{{ drawerDim.earned }}</strong>
           </div>
           <div class="ds-row">
-            <span>附加加分</span>
+            <span>人工扣分</span>
+            <strong :class="{ capped: draftDeductionTotal > 0 }">−{{ draftDeductionTotal }}</strong>
+          </div>
+          <div class="ds-row">
+            <span>超出基础分 100 的部分</span>
             <strong :class="{ capped: drawerDim.bonusTotal > drawerDim.bonusCap }">
-              {{ drawerDim.bonusTotal }} / {{ drawerDim.bonusCap }}
+              {{ drawerDim.bonusTotal }} / 加分上限 {{ drawerDim.bonusCap }}
               <span v-if="drawerDim.bonusTotal > drawerDim.bonusCap" class="cap-note">（已封顶）</span>
             </strong>
           </div>
           <div class="ds-row total">
             <span>维度得分</span>
-            <strong>{{ draftDimensionScore }}</strong>
+            <strong>{{ draftDimensionScore }} <small>/ 上限 {{ drawerDim.ceiling }}</small></strong>
           </div>
         </div>
 
@@ -310,7 +321,7 @@
           show-icon
           :closable="false"
           style="margin-top:10px"
-          :title="`本维度附加加分 ${drawerDim.bonusTotal} 分已超出上限 ${drawerDim.bonusCap} 分，只按上限计入`"
+          :title="`本维度已超出基础分 100 共 ${drawerDim.bonusTotal} 分，超出上限 ${drawerDim.bonusCap} 分，只按上限计入`"
           description="不会扣回已发放的加分。超出部分在审核环节本应被拒绝，出现这种情况通常是上限后来被调低了。"
         />
 
@@ -430,18 +441,24 @@ const drawerTitle = computed(() =>
 )
 
 // 抽屉里改过的扣分，实时重算维度分（保存前不落库）
-const draftModuleBaseTotal = computed(() => {
+//
+// 公式必须与服务端 utils/quarterly.js 一字对应：
+//   维度得分 = min( max(0, 已得 − 人工扣分), 上限 )
+// 这里只预览扣分带来的变化，所以已得沿用服务端算好的 earned。
+const draftDeductionTotal = computed(() => {
   if (!drawerDim.value) return 0
-  return drawerDim.value.modules.reduce((sum, m) => {
-    const d = deductionDraft[m.moduleId] ?? m.deduction
-    return sum + Math.max(0, m.baseScore - d)
-  }, 0)
+  return drawerDim.value.modules.reduce(
+    (sum, m) => sum + (deductionDraft[m.moduleId] ?? m.deduction), 0
+  )
 })
 
 const draftDimensionScore = computed(() => {
   if (!drawerDim.value) return 0
   if (drawerDim.value.hardZero) return 0
-  return draftModuleBaseTotal.value + Math.min(drawerDim.value.bonusTotal, drawerDim.value.bonusCap)
+  return Math.min(
+    Math.max(0, drawerDim.value.earned - draftDeductionTotal.value),
+    drawerDim.value.ceiling
+  )
 })
 
 function cellOf(row, code) {
@@ -684,7 +701,15 @@ onMounted(load)
 .ds-row strong { color: var(--text-primary); }
 .ds-row.total { border-top: 1px solid var(--ink-100); padding-top: 8px; font-size: 15px; }
 .ds-row.total strong { color: var(--primary); font-size: 18px; }
+.ds-row.total strong small { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
 .cap-note { font-size: 11px; color: var(--status-pending); font-weight: 400; }
+
+.drawer-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-placeholder);
+}
 
 .hardzero-block {
   margin-top: 8px; padding: 16px;

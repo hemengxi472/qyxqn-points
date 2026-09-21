@@ -60,17 +60,19 @@
             />
           </el-form-item>
 
-          <!-- 加分上限提示。服务端校验才是准绳，这里只是让"填完才被拒"少发生。
-               遗留模块（bonus_cap = 0）没有 bonusContext，不显示。 -->
+          <!-- 维度额度提示。服务端校验才是准绳，这里只是让"填完才被拒"少发生。
+               遗留模块（上限为 0）没有 bonusContext，不显示。累加制下额度是
+               **维度上限**（基础分 + 加分上限），不是加分上限 —— granted 是
+               "本维度已得"，remaining 是"还能再得多少"。 -->
           <el-alert
             v-if="bonusContext"
             :type="bonusContext.remaining === 0 ? 'warning' : 'info'"
             show-icon
             :closable="false"
             style="margin-bottom:16px"
-            :title="`${bonusContext.dimensionName} · 本季度附加加分 ${bonusContext.granted}/${bonusContext.bonusCap} 分，剩余 ${bonusContext.remaining} 分`"
+            :title="`${bonusContext.dimensionName} · 本季度已得 ${bonusContext.granted} / 上限 ${bonusContext.ceiling} 分（基础 ${bonusContext.baseScore} + 加分上限 ${bonusContext.bonusCap}），剩余 ${bonusContext.remaining} 分`"
             :description="bonusContext.remaining === 0
-              ? '本季度该维度加分额度已用完，再通过会占用下一季度的额度或需要先撤销此前的审核。'
+              ? '本季度该维度已达上限，再通过会被拒绝。需要继续加分请先撤销此前的审核，或确认本季度的参与已计满。'
               : `本次最多可填 ${bonusContext.remaining} 分，超出会被拒绝。填 0 表示「通过但不加分」。`"
           />
 

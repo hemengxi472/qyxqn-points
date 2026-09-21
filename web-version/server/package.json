@@ -5,7 +5,11 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "demo:status": "node scripts/demo-participation.js --status",
+    "demo:seed": "node scripts/demo-participation.js --seed",
+    "demo:cleanup": "node scripts/demo-participation.js --cleanup",
+    "demo:clear-lock": "node scripts/demo-participation.js --clear-lock"
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",

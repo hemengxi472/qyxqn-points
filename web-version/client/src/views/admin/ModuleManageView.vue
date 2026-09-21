@@ -30,7 +30,7 @@
               </span>
               <span class="mc-desc">{{ mod.description }}</span>
               <span class="mc-meta">
-                基础分 {{ mod.baseScore }} · 加分上限 {{ mod.bonusCap }} · 周期 {{ mod.cycle || '—' }}
+                基础分 {{ mod.baseScore }}（上限 {{ mod.baseScore + mod.bonusCap }}） · 加分上限 {{ mod.bonusCap }} · 周期 {{ mod.cycle || '—' }}
                 <span v-if="mod.subCount" :class="{ bad: mod.subBaseSum !== mod.baseScore }">
                   · 子项合计 {{ mod.subBaseSum }}{{ mod.subBaseSum !== mod.baseScore ? ' ⚠️' : '' }}
                 </span>
@@ -115,8 +115,8 @@
           show-icon
           :closable="false"
           style="margin-bottom:16px"
-          :title="`子项基础分合计 ${baseScoreMismatch}，与季度基础分 ${moduleForm.baseScore} 不一致`"
-          description="这个维度不会满分 100。季度评分按子项基础分逐项算，所以维度满分实际由子项决定 —— 请核对子项的基础分。"
+          :title="`子项上限合计 ${baseScoreMismatch}，与维度基础分 ${moduleForm.baseScore} 不一致`"
+          description="维度上限 = 基础分 + 加分上限，子项上限合计应当等于基础分。对不上说明子项的分数分配与维度总分不一致，请核对子项的本项上限。"
         />
 
         <el-form-item label="赋分周期">
@@ -163,18 +163,18 @@
         </el-form-item>
 
         <div class="form-row three">
-          <el-form-item label="季度基础分">
+          <el-form-item label="本项上限">
             <el-input-number v-model="subForm.baseScore" :min="0" style="width:100%" />
           </el-form-item>
           <el-form-item label="参考加分/次">
-            <el-input-number v-model="subForm.points" :min="0" style="width:100%" />
+            <el-input-number v-model="subForm.points" :min="1" style="width:100%" />
           </el-form-item>
           <el-form-item label="加分上限">
             <el-input-number v-model="subForm.bonusCap" :min="0" style="width:100%" />
           </el-form-item>
         </div>
         <div class="form-hint" style="margin:-10px 0 16px">
-          季度基础分是季初默认拿到的分（管理员之后录扣分）；参考加分/次只在员工端展示，实际给分由审核人按上限填入。
+          本项上限是该子项在季度内最多可累计到的分，各子项上限合计等于维度基础分；实际得分按当季审核通过的记录逐笔累加，季初不预送。参考加分/次是提交页的默认分值，实际给分由审核人填入，维度上限由服务端把关。
         </div>
 
         <el-form-item label="积分规则">
@@ -244,8 +244,10 @@ const subForm = reactive({
   baseScore: 0, scoreRule: '', bonusRule: '', bonusCap: 0, themeActivity: [], evidenceRequired: ''
 })
 
-// 「Σ 子项基础分 = 维度基础分」这个不变量最容易在编辑基础分时被破坏，
-// 而破坏之后一个季度都没人会发现（维度安静地变成 97 分满分）。
+// 「Σ 子项上限 = 维度基础分」这个不变量最容易在编辑基础分时被破坏，破坏了
+// 一个季度都没人会发现 —— 员工端会看到各子项上限加起来是 97、维度却写着 100。
+// 累加制下子项上限不再直接参与算分（得分按 points_log 累加），所以它不影响
+// 已经算出来的分数，影响的是**制度说明的自洽性**，一样要拦。
 // 只在已有子项的模块上提示 —— 新建模块 subCount 为 0，提示只会是噪声。
 const baseScoreMismatch = computed(() => {
   const mod = editingModule.value
