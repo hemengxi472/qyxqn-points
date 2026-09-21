@@ -10,7 +10,15 @@
         <el-table-column prop="name" label="姓名" width="100" />
         <el-table-column prop="employeeId" label="工号" width="120" />
         <el-table-column prop="department" label="部门" min-width="140" />
-        <el-table-column label="总积分" width="110" align="center">
+        <!-- 这一列是 points_summary.total_points，生命周期累计（含往季），
+             不是季度分。原来叫"总积分"，管理员很自然地拿它去和季度排名页
+             的分数比，然后得出"对不上"的结论 —— 两个数本来就不是一回事。 -->
+        <el-table-column width="130" align="center">
+          <template #header>
+            <el-tooltip content="建库至今累计（含往季），不等于季度排名页的季度分" placement="top">
+              <span style="cursor:help;border-bottom:1px dashed var(--ink-200)">累计积分</span>
+            </el-tooltip>
+          </template>
           <template #default="{ row }">
             <span class="points-cell">{{ row.totalPoints }}</span>
           </template>

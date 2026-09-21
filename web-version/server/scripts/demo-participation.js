@@ -68,21 +68,28 @@ function rng(seed) {
 // 每人每维度要达到的完成度（0~1，乘维度基础分 100）
 //
 // 有健康对所有人生成 50~70%：用户明确要求"这个季度每个人都打开健康和纪录"。
-// 其余五个维度 0~63%，其中约 1/5 的人该维度为 0 —— 全铺且人人相近的话，
-// 排名还是没有区分度，那正是这次要修的问题。
+// 其余五个维度 30~65%。
 //
-// 上限刻意压在 70%：维度天花板是 100 + 加分上限，留足 30 分以上余量，
+// 下界是 0.3 而不是 0，且 planSubmissions 里另有"每子项至少 1 次"的兜底：
+// 上一版的公式是 Math.max(0, R() * 0.75 - 0.12)，会抽出 0，结果是 30 人里
+// 有 9~14 人在有本领/有成长/有智慧/有担当/有纪律 上整个维度是 0 分 —— 员工端
+// 看到一片 0，"六个维度都铺满、不能是 0 分"的要求根本没达成。**别再改回带 0 的抽样。**
+//
+// 上限刻意压在 65~70%：维度天花板是 100 + 加分上限，要留出 40 分以上余量，
 // 演示现场还能真的提交一条、审核通过、看着分数涨上去。
 // ---------------------------------------------------------------------------
 function targetFraction(dimCode, R) {
   if (dimCode === 'health') return 0.5 + R() * 0.2;
-  return Math.max(0, R() * 0.75 - 0.12);
+  return 0.3 + R() * 0.35;
 }
 
 // 把完成度拆成"每个子项提交几次"。次数只能是整数，所以维度合计会略偏离目标，
 // 这是对的 —— 真实数据本来就长这样，凑成整百反而是假的。
 //
 // 次数上限 = 子项基础分 / 子项每次分值，也就是该子项做到"本项上限"为止。
+// 次数下界是 1：每个子项至少留一条记录，这样"维度分非 0"和"子项已得非 0"
+// 同时成立。cap 为 0 的子项（分值为 0、或基础分不够一次）在前一行就跳过了，
+// 所以这里的 max(1, ...) 不会越过 cap。
 function planSubmissions(dim, subs, frac, R) {
   const plan = [];
   for (const m of subs) {
@@ -91,7 +98,7 @@ function planSubmissions(dim, subs, frac, R) {
     const cap = Math.floor((Number(m.base_score) || 0) / per);
     if (cap <= 0) continue;
     const want = (Number(m.base_score) || 0) * frac;
-    const count = Math.max(0, Math.min(cap, Math.round(want / per)));
+    const count = Math.min(cap, Math.max(1, Math.round(want / per)));
     for (let i = 0; i < count; i++) plan.push({ sub: m, points: per });
   }
   // 打乱子项顺序，免得日志里所有"身体健康"都挤在月初 —— 一眼就能看出是生成的

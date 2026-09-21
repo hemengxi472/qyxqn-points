@@ -43,7 +43,13 @@
           <span class="hero-unit">分</span>
         </div>
         <div class="hero-divider" />
-        <p class="hero-hint">持续积累，见证成长</p>
+        <p class="hero-hint">建库至今累计，含往季</p>
+        <!-- 把季度分直接摆在累计分下面：这两个数在演示账号上恰好相等（那些账号
+             的分全部来自本季度），两块大数字并排出现而没有任何说明时，
+             看到的人只会以为有一个算错了。 -->
+        <p v-if="quarterly" class="hero-quarter">
+          本季度 {{ quarterly.totalScore }} 分 · 第 {{ quarterly.rank }} 名（两套口径，不可相加）
+        </p>
       </div>
       <!-- 糖果粒子 -->
       <div class="particles">
@@ -111,8 +117,8 @@
     <!-- 累计积分（含历史） -->
     <div v-if="moduleBreakdown.length || legacyPoints > 0" class="section">
       <div class="section-header">
-        <h3 class="section-title">📚 累计积分（含历史）</h3>
-        <span class="section-hint">点击卡片进入申请</span>
+        <h3 class="section-title">📚 历史累计积分</h3>
+        <span class="section-hint">建库至今，含往季 · 点击卡片进入申请</span>
       </div>
       <div class="module-grid">
         <!-- 历史积分卡：旧四模块停用后，这部分分只存在于 module_points 里，
@@ -405,6 +411,13 @@ function animateCount(from, to, duration) {
   border-radius: 2px;
 }
 .hero-hint { font-size: 13px; color: rgba(255,255,255,0.5); letter-spacing: 3px; }
+.hero-quarter {
+  margin-top: 10px; font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.16);
+  border-radius: 20px; padding: 6px 16px;
+  display: inline-block;
+}
 
 /* 可爱小精灵浮动 */
 .sprites { position: absolute; inset: 0; pointer-events: none; z-index: 0; }

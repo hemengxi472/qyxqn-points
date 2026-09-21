@@ -64,7 +64,17 @@
           <div v-else class="sub-grid">
             <div v-for="sub in subcategories" :key="sub.id" class="sub-card" :class="{ inactive: !sub.isActive }">
               <div class="sc-info">
-                <span class="sc-name">{{ sub.name }} <el-tag size="small" type="warning">{{ sub.points }}分</el-tag></span>
+                <!-- 这个标签以前是 `{{ sub.points }}分`。两个毛病：
+                     ① 分值没设时它就渲染出"0分"，看上去像"这个子项值 0 分"，
+                        实际含义是"还没配参考分值"——那次截图里的 0 分徽章就是它；
+                     ② 光写"10分"看不出是"每次加分"还是"整项上限"，旁边还有个
+                        本项上限，两个数容易被当成同一个。现在把话说完。 -->
+                <span class="sc-name">
+                  {{ sub.name }}
+                  <el-tag size="small" :type="sub.points > 0 ? 'warning' : 'danger'">
+                    {{ sub.points > 0 ? `加分 ${sub.points}/次` : '未设分值' }}
+                  </el-tag>
+                </span>
                 <span class="sc-desc">{{ sub.description }}</span>
                 <span v-if="sub.maxTimes > 0" class="sc-limit">每年限 {{ sub.maxTimes }} 次</span>
                 <span class="sc-meta">需照片: {{ sub.requiresPhoto ? '是' : '否' }} · 排序: {{ sub.sortOrder }}</span>
