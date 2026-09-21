@@ -503,9 +503,25 @@ router.delete('/employees/:id', superAdminMiddleware, async (req, res) => {
     });
   }
 
-  // 顺序无所谓（没有级联外键），列全了才不留悬空行。
+  // 团队任务的申请由「提交人」持有，但加分流水会写进全组成员名下。若被删的是提交人，
+  // 其他成员的 points_log 仍指向他的申请，删 submissions 时外键必炸。和上面的操作人
+  // 守卫一样，这里直接拦下，让管理员去处理团队任务，而不是删一半留下坏数据。
+  const teamRefs = await db.prepare(
+    `SELECT COUNT(*) AS cnt FROM points_log pl
+       JOIN submissions s ON pl.submission_id = s.id
+      WHERE s.user_id = ? AND pl.user_id <> ?`
+  ).get(user.id, user.id);
+  if (Number(teamRefs.cnt) > 0) {
+    return res.status(409).json({
+      message: `${user.name} 是团队任务的提交人，其申请已被 ${teamRefs.cnt} 条他人积分流水引用，删除会破坏这些人的积分记录。请先处理团队任务或改用「禁用」。`,
+      code: 'TEAM_SUBMITTER'
+    });
+  }
+
+  // 顺序不能乱：points_log.submission_id 外键指向 submissions.id，必须先删 points_log
+  // 再删 submissions，否则触发 FOREIGN KEY constraint failed（生产曾因此整进程崩掉）。
+  // groups.submission_id 也可能指向该员工的团队任务申请，先解除引用再删 submissions。
   const SUBJECT_TABLES = [
-    ['submissions', 'user_id'],
     ['points_log', 'user_id'],
     ['points_summary', 'user_id'],
     ['group_members', 'user_id'],
@@ -514,17 +530,28 @@ router.delete('/employees/:id', superAdminMiddleware, async (req, res) => {
     ['quarterly_module_scores', 'user_id'],
     ['quarterly_bonus_ledger', 'user_id'],
     ['quarterly_dimension_status', 'user_id'],
-    ['quarterly_score_log', 'user_id']
+    ['quarterly_score_log', 'user_id'],
+    ['submissions', 'user_id']
   ];
 
   const deleted = {};
-  await trx(async (tx) => {
-    for (const [table, col] of SUBJECT_TABLES) {
-      const r = await tx.prepare(`DELETE FROM ${table} WHERE ${col} = ?`).run(user.id);
-      if (r.changes > 0) deleted[table] = r.changes;
-    }
-    await tx.prepare('DELETE FROM users WHERE id = ?').run(user.id);
-  });
+  try {
+    await trx(async (tx) => {
+      // 若他恰好是团队任务的提交人，先解除团队对他的申请的外键引用（NULL 掉）。
+      await tx.prepare(
+        `UPDATE groups SET submission_id = NULL WHERE submission_id IN
+           (SELECT id FROM submissions WHERE user_id = ?)`
+      ).run(user.id);
+      for (const [table, col] of SUBJECT_TABLES) {
+        const r = await tx.prepare(`DELETE FROM ${table} WHERE ${col} = ?`).run(user.id);
+        if (r.changes > 0) deleted[table] = r.changes;
+      }
+      await tx.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+    });
+  } catch (e) {
+    // 别让删除失败把整个进程带崩：其余路由大量依赖这个进程活着。
+    return res.status(500).json({ message: `删除失败：${e && e.message ? e.message : e}` });
+  }
 
   res.json({ success: true, name: user.name, deleted });
 });

@@ -594,7 +594,6 @@ const NEW_COHORT = [
   { dept: '康河街道服务中心',   employeeId: 'E0038042850', name: '张印全',     group: 6 },
   { dept: '苏坡街道服务中心',   employeeId: 'E0038042944', name: '邓淑萍',     group: 6 },
   { dept: '金沙街道服务中心',   employeeId: 'E0038042847', name: '张玥',       group: 6 },
-  { dept: '苏坡街道服务中心',   employeeId: 'E1000058599', name: '王廷元',     group: 6 },
   { dept: '网络建维中心',       employeeId: 'E1000121114', name: '张玉',       group: 6 },
 ];
 
