@@ -104,6 +104,19 @@ function targetFraction(dimCode, R) {
   return lo + R() * span;
 }
 
+// 整个季度不参与的人数（总分 0、六个维度全 0）。
+//
+// 用户要求「允许少部分人为 0」。全员都有分反而不可信 —— 真实的一个季度里总有
+// 人出差、借调、或者干脆没参加，排名表末尾有几个 0 才像真的。
+//
+// 与 planSubmissions 里「每子项至少 1 次」的兜底**不矛盾**，两者针对的是不同的
+// 东西：那条兜底是防止**参与者**某个维度意外为 0（那看着像程序出错），这里是
+// **整人**不参与，是有意为之的 0。改的时候别把一个当成另一个的例外。
+//
+// 固定人数而非按比例抽签：比例抽签这一次可能抽出 1 个、下一次 5 个，
+// 演示前没法预知台上会看到几个 0。30 人取 3 人 ≈ 10%。
+const NON_PARTICIPANT_COUNT = 3;
+
 // 把完成度拆成"每个子项提交几次"。次数只能是整数，所以维度合计会略偏离目标，
 // 这是对的 —— 真实数据本来就长这样，凑成整百反而是假的。
 //
@@ -267,11 +280,29 @@ async function seed(quarter) {
   }
   fs.writeFileSync(BACKUP, JSON.stringify(backup, null, 1));
 
+  // 选出本季度不参与的人：按 'nonpart:' + 工号的哈希排序取前 N 个。
+  //
+  // 用独立的哈希而不是复用每人那个 R：R 在下面的循环里是一条被按顺序消费的
+  // 随机流，在这里先抽一次会把所有人的后续取值整体错位，样本数据全变。
+  // 这个名单也与人无关地稳定，换季度重跑仍是同一批人。
+  const nonPart = new Set(
+    [...users]
+      .sort((a, b) =>
+        hashStr('nonpart:' + (a.employee_id || a.id)) -
+        hashStr('nonpart:' + (b.employee_id || b.id)))
+      .slice(0, NON_PARTICIPANT_COUNT)
+      .map(u => u.id)
+  );
+
   let subsWritten = 0;
   let logsWritten = 0;
 
   await trx(async (tx) => {
     for (const u of users) {
+      // 不参与的人一条记录都不写 —— 六个维度天然为 0，总分 0。
+      // 不需要"把分数设成 0"这步：分数是算出来的，没有流水就是 0。
+      if (nonPart.has(u.id)) continue;
+
       const R = rng(hashStr(u.employee_id || u.id));
       const at = makeTimeFactory(R);
 
@@ -355,10 +386,23 @@ async function seed(quarter) {
     }
   });
 
+  const idle = users.filter(u => nonPart.has(u.id));
   console.log(`已写入样本数据（${formatQuarter(quarter)}）：`);
   console.log(`  参评人 ${users.length} 人 | 申请单 ${subsWritten} 条 | 积分流水 ${logsWritten} 条`);
+  console.log(`  本季度未参与 ${idle.length} 人（0 分）：${idle.map(u => u.name).join('、')}`);
   console.log(`  备份已存到 ${BACKUP}`);
-  await status(quarter);
+  const report = await status(quarter);
+
+  // 返回结构化结果给 HTTP 路由用（CLI 不看返回值，只看上面的输出）
+  return {
+    quarter,
+    scorableUsers: users.length,
+    submissions: subsWritten,
+    pointsLogs: logsWritten,
+    nonParticipants: idle.map(u => u.name),
+    backupFile: BACKUP,
+    ...report
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -391,24 +435,48 @@ async function status(quarter) {
   console.log(`  备份文件        ${fs.existsSync(BACKUP) ? BACKUP : '（无）'}`);
   console.log(`  季度锁定快照    ${lock.n} 行${Number(lock.n) > 0 ? ' ← 已锁定，排名页会读快照而不是实时分' : ''}`);
 
+  // 返回结构化状态给 HTTP 路由用；CLI 忽略返回值，只看上面的打印。
+  const base = {
+    demoPointsLogs: Number(demoLogs.n),
+    demoSubmissions: Number(demoSubs.n),
+    demoQuarterlyLogs: Number(demoQsl.n),
+    backupFile: fs.existsSync(BACKUP) ? BACKUP : null,
+    lockedSnapshotRows: Number(lock.n),
+    scorableUsers: 0,
+    minScore: 0,
+    maxScore: 0,
+    distinctScores: 0,
+    zeroScoreUsers: 0
+  };
+
   const users = await listScorableUsers(db);
   const scores = await buildQuarterlyScores(db, quarter, users.map(u => u.id));
   const rows = [...scores.values()].sort((a, b) => b.totalScore - a.totalScore);
   if (rows.length === 0) {
     console.log('  （没有参评人）');
-    return;
+    return base;
   }
   const totals = rows.map(r => r.totalScore);
-  console.log(`  实时分区间      ${Math.min(...totals)} ~ ${Math.max(...totals)} / 上限 ${rows[0].maxScore}（${rows.length} 人）`);
+  const stats = {
+    ...base,
+    scorableUsers: rows.length,
+    minScore: Math.min(...totals),
+    // maxScore 是**实际最高分**，ceiling 才是理论上限（760）。
+    // 两者混用会让界面显示"分数区间 0 ~ 760"，那是天花板不是任何人的分。
+    maxScore: Math.max(...totals),
+    ceiling: rows[0].maxScore,
+    distinctScores: new Set(totals).size,
+    zeroScoreUsers: totals.filter(t => t === 0).length
+  };
+  console.log(`  实时分区间      ${stats.minScore} ~ ${stats.maxScore} / 上限 ${stats.ceiling}（${rows.length} 人）`);
 
   // 计分起点之前的季度必然是"30 人全 0、只有 1 种分值"，这两句本来就是为
   // 本季度诊断用的，照打出来只会让人以为样本数据没灌进去。上面已经写明原因了。
-  if (!isScoredQuarter(quarter)) return;
+  if (!isScoredQuarter(quarter)) return stats;
 
-  const distinct = new Set(totals).size;
-  console.log(`  不同分值        ${distinct} 种${distinct === 1 ? ' ← 全都一样，排名没有区分度' : ''}`);
-  const zero = totals.filter(t => t === 0).length;
-  if (zero > 0) console.log(`  0 分人数        ${zero} 人`);
+  console.log(`  不同分值        ${stats.distinctScores} 种${stats.distinctScores === 1 ? ' ← 全都一样，排名没有区分度' : ''}`);
+  if (stats.zeroScoreUsers > 0) console.log(`  0 分人数        ${stats.zeroScoreUsers} 人`);
+  return stats;
 }
 
 // ---------------------------------------------------------------------------
@@ -476,7 +544,29 @@ async function main() {
   await seed(quarter);
 }
 
-main().catch(e => {
-  console.error('执行失败：', e && e.message ? e.message : e);
-  process.exit(1);
-});
+// 只有直接 `node scripts/demo-participation.js` 时才跑 CLI。
+//
+// 没有这个判断的话，服务端 `require` 这个文件来复用 seed/cleanup 会顺带执行
+// 一次 main()：它去读 process.argv（那是 Node 自己的参数，不是脚本参数），
+// 匹配不到任何模式就打印用法然后 process.exit(1) —— **把整个服务进程干掉**。
+if (require.main === module) {
+  main().catch(e => {
+    console.error('执行失败：', e && e.message ? e.message : e);
+    process.exit(1);
+  });
+}
+
+// 给 server/routes/demo.js 复用。CLI 与 HTTP 两条路走的是同一份实现，
+// 不复制逻辑 —— 复制出来的第二份迟早在"哪些行算 demo 数据"上跟第一份分叉。
+//
+// cleanupAll 而不是直接导出 cleanup：后者要求调用方自己开事务（CLI 里是
+// `trx(async tx => cleanup(tx))`）。让 HTTP 路由去记这件事，就是同一个坑挖两次。
+module.exports = {
+  seed,
+  status,
+  cleanupAll: async () => {
+    let counts;
+    await trx(async (tx) => { counts = await cleanup(tx); });
+    return counts;
+  }
+};

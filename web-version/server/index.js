@@ -23,6 +23,10 @@ app.use('/api/submissions', require('./routes/submissions'));
 app.use('/api/groups', require('./routes/groups'));
 app.use('/api/points', require('./routes/points'));
 app.use('/api/admin', require('./routes/admin'));
+// 样本数据的 HTTP 入口（仅 superadmin）。线上库是 Turso，凭据只在 Render 的
+// 环境变量里，本机拿不到 —— 没有这个入口，往线上灌演示数据就只能去 Render Shell
+// 敲命令。它转调 scripts/demo-participation.js，逻辑与 CLI 同一份。
+app.use('/api/admin/demo', require('./routes/demo'));
 
 // Serve frontend static files in production
 let clientDist = path.join(__dirname, 'client', 'dist');       // Docker

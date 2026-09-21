@@ -344,6 +344,53 @@ async function initDB() {
   // 都不出现，留着零成本；删它才是风险。
   await addColumnIfMissing('fraud_records', 'affects_quarter', "INTEGER NOT NULL DEFAULT 0");
 
+  // ------------------------------------------------------------------
+  // 维度属性回填（dimension_code / base_score / bonus_cap）
+  //
+  // 这是线上「子项分值全是 0」的根因，别删。
+  //
+  // addColumnIfMissing 只是把列建出来，新列在**已存在的行**上取的是默认值 ——
+  // dimension_code 是 ''、base_score 与 bonus_cap 是 0。而 seed.js 只在这些行
+  // 「不存在」时才 INSERT 完整的属性值，存在时走的 else 分支只有一句
+  // `UPDATE modules SET is_active = 1`，除非 SEED_CONTENT=force 否则一个字段都不写。
+  //
+  // 于是线上那六个模块（它们在本轮改造之前就存在了）dimension_code 一直是空串，
+  // 接着 SUB_BONUS_CAP_FIX / SUB_POINT_FIX 里的
+  //   `module_id = (SELECT id FROM modules WHERE dimension_code = ?)`
+  // 子查询返回 NULL，整个 UPDATE 匹配 0 行 —— 子项的分值与加分上限永远补不上，
+  // 界面上就是「0分」徽章。本机看起来正常，是因为本地库被重建过、走的是 INSERT 路径。
+  //
+  // 按 **name** 回填而不是按 dimension_code：name 是这里唯一确定存在的东西，
+  // 拿一个正缺失的字段去做匹配条件只会继续静默失败。
+  //
+  // base_score / bonus_cap 一并补：它们同样是 0 的话，维度上限会算成 0，
+  // 审核时任何一次加分都会被判成「超上限」。
+  //
+  // 只在「还停在默认值」时才写，管理员改过的不覆盖，重跑是 no-op。
+  // ------------------------------------------------------------------
+  const DIMENSION_FIX = [
+    //  name,      code,        base_score, bonus_cap
+    ['有健康', 'health', 100, 10],
+    ['有本领', 'skill', 100, 10],
+    ['有成长', 'growth', 100, 60],
+    ['有智慧', 'wisdom', 100, 30],
+    ['有担当', 'duty', 100, 30],
+    ['有纪律', 'discipline', 100, 20]
+  ];
+  let dimFixed = 0;
+  for (const [name, code, baseScore, bonusCap] of DIMENSION_FIX) {
+    const r = await db.prepare(
+      `UPDATE modules
+          SET dimension_code = ?, base_score = ?, bonus_cap = ?
+        WHERE name = ?
+          AND (dimension_code <> ? OR base_score <> ? OR bonus_cap <> ?)`
+    ).run(code, baseScore, bonusCap, name, code, baseScore, bonusCap);
+    dimFixed += Number(r.changes || 0);
+  }
+  if (dimFixed > 0) {
+    console.log(`维度属性已回填 ${dimFixed} 条（dimension_code / 基础分 / 加分上限）`);
+  }
+
   // Backfill month_year
   await client.execute(`UPDATE submissions SET month_year = strftime('%Y-%m', created_at) WHERE month_year = ''`);
   await client.execute(`UPDATE points_log SET month_year = strftime('%Y-%m', created_at) WHERE month_year = ''`);
@@ -405,31 +452,38 @@ async function initDB() {
   // 为什么放在 db.js 而不是 seed.js：seed 只在 INSERT 时写这些值（seed.js 里
   // "只插入不覆盖文案"），线上这些行早就存在了，走 INSERT 那条路径根本改不到。
   //
-  // 幂等靠守卫而不是靠标记表：只有当 bonus_cap 还等于**维度**bonus_cap 时才改，
-  // 也就是"还停留在旧错误状态"。改完之后两者不再相等，重跑自然不命中；
-  // 管理员事后手工调过的值也不会被覆盖（那时两个数已经不相等了）。
+  // 幂等靠守卫而不是靠标记表：命中条件见下方循环里的两行注释（"没设过"的两种
+  // 状态）。改完之后两个数都不再成立，重跑自然不命中；管理员事后手工调过的值
+  // 也不会被覆盖（那时既不为 0、也不等于维度上限）。
   //
   // 唯一的误伤面：管理员如果故意把某个子项调回"恰好等于维度上限"，会被重置一次。
   // 这个取舍是为了不引入一张只为跑一次的标记表。
   // ------------------------------------------------------------------
   const SUB_BONUS_CAP_FIX = [
-    ['health', '身体健康', 10], ['health', '心理健康', 0],
-    ['skill', '专业扎实', 10], ['skill', '高效执行', 10], ['skill', '跨界学习', 10],
-    ['growth', '持续成长', 60], ['growth', '自信自强', 60], ['growth', '品质修养', 60],
-    ['wisdom', '全局思维', 10], ['wisdom', '职业规划', 10], ['wisdom', '难题破解', 10],
-    ['duty', '岗位履职担当', 15], ['duty', '团队协同担当', 10], ['duty', '青年志愿担当', 5],
-    ['discipline', '合规纪律', 10], ['discipline', '职业操守', 10], ['discipline', '自我管理', 0]
+    ['有健康', '身体健康', 10], ['有健康', '心理健康', 0],
+    ['有本领', '专业扎实', 10], ['有本领', '高效执行', 10], ['有本领', '跨界学习', 10],
+    ['有成长', '持续成长', 60], ['有成长', '自信自强', 60], ['有成长', '品质修养', 60],
+    ['有智慧', '全局思维', 10], ['有智慧', '职业规划', 10], ['有智慧', '难题破解', 10],
+    ['有担当', '岗位履职担当', 15], ['有担当', '团队协同担当', 10], ['有担当', '青年志愿担当', 5],
+    ['有纪律', '合规纪律', 10], ['有纪律', '职业操守', 10], ['有纪律', '自我管理', 0]
   ];
   let bonusCapFixed = 0;
-  for (const [code, subName, target] of SUB_BONUS_CAP_FIX) {
+  for (const [dimName, subName, target] of SUB_BONUS_CAP_FIX) {
+    // 守卫要同时认两种"没设过"的状态，缺一个就会有整批子项永远补不上：
+    //   ① bonus_cap = 0            —— 列是 addColumnIfMissing 加的，老行取默认值
+    //   ② bonus_cap = 维度bonus_cap —— 早期被错播成维度上限
+    // 之所以不能只留 ②：上面的 DIMENSION_FIX 会先把 modules.bonus_cap 修正过来，
+    // 此后 ② 的等号两边不再相等，只认 ② 的话线上子项上限就再也补不上了。
+    // 用 name 匹配维度而不是 dimension_code —— 那个字段正是本次要修的。
     const r = await db.prepare(
       `UPDATE subcategories
           SET bonus_cap = ?
         WHERE name = ?
-          AND module_id = (SELECT id FROM modules WHERE dimension_code = ?)
+          AND module_id = (SELECT id FROM modules WHERE name = ?)
           AND bonus_cap <> ?
-          AND bonus_cap = (SELECT bonus_cap FROM modules WHERE dimension_code = ?)`
-    ).run(target, subName, code, target, code);
+          AND (bonus_cap = 0
+               OR bonus_cap = (SELECT bonus_cap FROM modules WHERE name = ?))`
+    ).run(target, subName, dimName, target, dimName);
     bonusCapFixed += Number(r.changes || 0);
   }
   if (bonusCapFixed > 0) {
@@ -460,22 +514,22 @@ async function initDB() {
   // 状态"，这边要识别"还没填过"，两者是不同的问题，别把守卫抄混了。
   // ------------------------------------------------------------------
   const SUB_POINT_FIX = [
-    ['health', '身体健康', 10], ['health', '心理健康', 10],
-    ['skill', '专业扎实', 10], ['skill', '高效执行', 10], ['skill', '跨界学习', 10],
-    ['growth', '持续成长', 10], ['growth', '自信自强', 10], ['growth', '品质修养', 10],
-    ['wisdom', '全局思维', 10], ['wisdom', '职业规划', 10], ['wisdom', '难题破解', 10],
-    ['duty', '岗位履职担当', 15], ['duty', '团队协同担当', 10], ['duty', '青年志愿担当', 5],
-    ['discipline', '合规纪律', 10], ['discipline', '职业操守', 10], ['discipline', '自我管理', 5]
+    ['有健康', '身体健康', 10], ['有健康', '心理健康', 10],
+    ['有本领', '专业扎实', 10], ['有本领', '高效执行', 10], ['有本领', '跨界学习', 10],
+    ['有成长', '持续成长', 10], ['有成长', '自信自强', 10], ['有成长', '品质修养', 10],
+    ['有智慧', '全局思维', 10], ['有智慧', '职业规划', 10], ['有智慧', '难题破解', 10],
+    ['有担当', '岗位履职担当', 15], ['有担当', '团队协同担当', 10], ['有担当', '青年志愿担当', 5],
+    ['有纪律', '合规纪律', 10], ['有纪律', '职业操守', 10], ['有纪律', '自我管理', 5]
   ];
   let pointsFixed = 0;
-  for (const [code, subName, target] of SUB_POINT_FIX) {
+  for (const [dimName, subName, target] of SUB_POINT_FIX) {
     const r = await db.prepare(
       `UPDATE subcategories
           SET points = ?
         WHERE name = ?
-          AND module_id = (SELECT id FROM modules WHERE dimension_code = ?)
+          AND module_id = (SELECT id FROM modules WHERE name = ?)
           AND points = 0`
-    ).run(target, subName, code);
+    ).run(target, subName, dimName);
     pointsFixed += Number(r.changes || 0);
   }
   if (pointsFixed > 0) {
