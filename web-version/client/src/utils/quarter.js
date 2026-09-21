@@ -22,13 +22,27 @@ export function formatQuarter(quarter) {
   return `${m[1]}年第${CN_QUARTER[Number(m[2])]}季度`;
 }
 
-// 最近 n 个季度（含当前），倒序 —— 给季度选择器用
+// 计分起点，与 server/utils/quarter.js 的 SCORING_START_QUARTER 一致。
+// 用户明确要求「2026 第三季度以前都是 0 分不做积分」——那之前的季度在服务端
+// 一律算作 0 分（见 utils/quarterly.js 的 scored 判断）。列在选择器里没有任何
+// 意义：点进去只会看到 30 个人整整齐齐的 0，然后来问是不是数据没灌进去。
+// 改这个值时必须两边一起改，否则选择器给出的季度和服务端认可的范围会错位。
+export const SCORING_START_QUARTER = '2026-Q3'
+
+export function isScoredQuarter(quarter) {
+  return String(quarter || '') >= SCORING_START_QUARTER
+}
+
+// 最近 n 个季度（含当前），倒序 —— 给季度选择器用。
+// 到计分起点为止就停，不会列出 2026-Q3 之前的季度。
 export function recentQuarters(n = 8, from = new Date()) {
   const out = [];
   let year = from.getFullYear();
   let q = Math.floor(from.getMonth() / 3) + 1;
   for (let i = 0; i < n; i++) {
-    out.push(`${year}-Q${q}`);
+    const key = `${year}-Q${q}`;
+    if (!isScoredQuarter(key)) break;
+    out.push(key);
     q -= 1;
     if (q === 0) {
       q = 4;

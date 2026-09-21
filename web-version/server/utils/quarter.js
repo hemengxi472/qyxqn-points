@@ -35,6 +35,24 @@ function isValidQuarter(s) {
   return /^\d{4}-Q[1-4]$/.test(String(s || ''));
 }
 
+// 计分起点。
+//
+// 用户明确要求：「2026 第三季度以前都是 0 分不做积分」。程序在此之前处于试运行，
+// 那段时间的流水要么是测试数据、要么根本没建账，拿它们排名没有意义。
+//
+// 为什么放在这里当成全局常量，而不是在几个查询里各写各的：
+// 季度分的读法有三处 —— 员工端工作台、管理端季度评分、季度排名 —— 它们都走
+// buildQuarterlyScores，但审核环节的上限校验另外走 dimensionEarned。只要其中
+// 任何一处漏掉这个判断，就会出现「排名页显示 0 分，但审核说该维度已得 90 分」
+// 这类自相矛盾。所以判定只有一个实现（isScoredQuarter），四处共用。
+//
+// 'YYYY-QN' 定长且 N 是单个数字，字符串比较与时间先后一致，不需要解析成日期。
+const SCORING_START_QUARTER = '2026-Q3';
+
+function isScoredQuarter(quarter) {
+  return String(quarter || '') >= SCORING_START_QUARTER;
+}
+
 // '2026-Q3' → { start, end, startMonth, endMonth }
 function quarterBounds(quarter) {
   const m = /^(\d{4})-Q([1-4])$/.exec(String(quarter || ''));
@@ -88,5 +106,7 @@ module.exports = {
   isValidQuarter,
   quarterBounds,
   recentQuarters,
-  formatQuarter
+  formatQuarter,
+  SCORING_START_QUARTER,
+  isScoredQuarter
 };

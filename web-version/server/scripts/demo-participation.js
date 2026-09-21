@@ -32,7 +32,10 @@ const fs = require('fs');
 const path = require('path');
 const { db, initDB, trx } = require('../db');
 const { buildQuarterlyScores, listScorableUsers } = require('../utils/quarterly');
-const { quarterKey, monthKey, isValidQuarter, formatQuarter } = require('../utils/quarter');
+const {
+  quarterKey, monthKey, isValidQuarter, formatQuarter,
+  isScoredQuarter, SCORING_START_QUARTER
+} = require('../utils/quarter');
 
 const BACKUP = path.join(__dirname, '.demo-backup.json');
 const DEMO_TAG = '[DEMO]';
@@ -67,20 +70,38 @@ function rng(seed) {
 // ---------------------------------------------------------------------------
 // 每人每维度要达到的完成度（0~1，乘维度基础分 100）
 //
-// 有健康对所有人生成 50~70%：用户明确要求"这个季度每个人都打开健康和纪录"。
-// 其余五个维度 30~65%。
+// 三条约束，改之前先读完：
 //
-// 下界是 0.3 而不是 0，且 planSubmissions 里另有"每子项至少 1 次"的兜底：
-// 上一版的公式是 Math.max(0, R() * 0.75 - 0.12)，会抽出 0，结果是 30 人里
-// 有 9~14 人在有本领/有成长/有智慧/有担当/有纪律 上整个维度是 0 分 —— 员工端
-// 看到一片 0，"六个维度都铺满、不能是 0 分"的要求根本没达成。**别再改回带 0 的抽样。**
+// ① **有健康、有纪律两个维度铺厚一点**（用户："有健康和有纪录分多一点"）。
+//    健康是对外的样板维度，纪律是试运行期最想立起来的规矩，这两个分高。
 //
-// 上限刻意压在 65~70%：维度天花板是 100 + 加分上限，要留出 40 分以上余量，
-// 演示现场还能真的提交一条、审核通过、看着分数涨上去。
+// ② **但不要统一** —— 区间本身给足随机。"健康人人都 70 分"这种整齐数据
+//    一眼假，而且排名会失去区分度，那就白铺了。
+//
+// ③ **下界不是 0**，且 planSubmissions 里另有"每子项至少 1 次"的兜底。
+//    上一版公式是 Math.max(0, R() * 0.75 - 0.12)，会抽出 0，结果是 30 人里
+//    有 9~14 人在有本领/有成长/有智慧/有担当/有纪律 上整个维度是 0 分 ——
+//    员工端看到一片 0。**别再改回带 0 的抽样。**
+//
+// 目标：总分最高落在 400 多（用户："分数最高控制在400多分左右"），30 人各不相同。
+//
+// 当前这套区间实测（2026-09，30 名参评人）：均值 353.7、标准差 35.6、
+// 区间 285~430、21 种不同分值。调完记得重跑 --status 复核这四个数。
+//
+// 想再抬高就把 health 的 lo/span 往上调，**别**把六个区间一起加 —— 一起加会把
+// 最低分也顶上去，30 个人的分布会挤成一团，排名反而更没区分度。
+//
+// 天花板余量：健康最高 92 / 维度上限 110 → 留 18 分，够扛一条 10 分的审核通过。
+// 这是「最高 400 多」和「现场可演示」折中后的结果，想留更多余量就得压低最高分。
 // ---------------------------------------------------------------------------
+const DIM_FRACTION = {
+  health:     { lo: 0.58, span: 0.34 },  // 58~92
+  discipline: { lo: 0.48, span: 0.40 },  // 48~88
+};
+
 function targetFraction(dimCode, R) {
-  if (dimCode === 'health') return 0.5 + R() * 0.2;
-  return 0.3 + R() * 0.35;
+  const { lo, span } = DIM_FRACTION[dimCode] ?? { lo: 0.33, span: 0.35 }; // 33~68
+  return lo + R() * span;
 }
 
 // 把完成度拆成"每个子项提交几次"。次数只能是整数，所以维度合计会略偏离目标，
@@ -344,20 +365,26 @@ async function seed(quarter) {
 // 只读状态
 // ---------------------------------------------------------------------------
 async function status(quarter) {
+  // 三个计数都按季度过滤。以前它们不带 quarter 条件，于是 `--status --quarter=2026-Q2`
+  // 会报出本季度的 1121 条样本数据 —— 明明那季度一条都没有。标题写着季度、数字却是
+  // 全局的，看到的人只会得出"上个季度也灌了 1121 条"这个错误结论。
   const demoLogs = await db.prepare(
-    `SELECT COUNT(*) AS n FROM points_log WHERE source = 'demo'`
-  ).get();
+    `SELECT COUNT(*) AS n FROM points_log WHERE source = 'demo' AND quarter = ?`
+  ).get(quarter);
   const demoSubs = await db.prepare(
-    `SELECT COUNT(*) AS n FROM submissions WHERE review_comment LIKE ?`
-  ).get(`${DEMO_TAG}%`);
+    `SELECT COUNT(*) AS n FROM submissions WHERE review_comment LIKE ? AND quarter = ?`
+  ).get(`${DEMO_TAG}%`, quarter);
   const demoQsl = await db.prepare(
-    `SELECT COUNT(*) AS n FROM quarterly_score_log WHERE source = 'demo'`
-  ).get();
+    `SELECT COUNT(*) AS n FROM quarterly_score_log WHERE source = 'demo' AND quarter = ?`
+  ).get(quarter);
   const lock = await db.prepare(
     'SELECT COUNT(*) AS n FROM quarterly_reward_snapshots WHERE quarter = ?'
   ).get(quarter);
 
   console.log(`=== ${formatQuarter(quarter)} 样本数据状态 ===`);
+  if (!isScoredQuarter(quarter)) {
+    console.log(`  该季度在计分起点（${formatQuarter(SCORING_START_QUARTER)}）之前，不计分，下面一律 0。`);
+  }
   console.log(`  demo 积分流水   ${demoLogs.n} 条`);
   console.log(`  demo 申请单     ${demoSubs.n} 条`);
   console.log(`  demo 季度流水   ${demoQsl.n} 条`);
@@ -373,6 +400,11 @@ async function status(quarter) {
   }
   const totals = rows.map(r => r.totalScore);
   console.log(`  实时分区间      ${Math.min(...totals)} ~ ${Math.max(...totals)} / 上限 ${rows[0].maxScore}（${rows.length} 人）`);
+
+  // 计分起点之前的季度必然是"30 人全 0、只有 1 种分值"，这两句本来就是为
+  // 本季度诊断用的，照打出来只会让人以为样本数据没灌进去。上面已经写明原因了。
+  if (!isScoredQuarter(quarter)) return;
+
   const distinct = new Set(totals).size;
   console.log(`  不同分值        ${distinct} 种${distinct === 1 ? ' ← 全都一样，排名没有区分度' : ''}`);
   const zero = totals.filter(t => t === 0).length;
@@ -394,6 +426,17 @@ async function main() {
   }
   if (!isValidQuarter(quarter)) {
     console.error(`季度格式无效：${quarter}（应为 YYYY-QN）`);
+    process.exit(1);
+  }
+
+  // 计分起点是 2026-Q3（见 utils/quarter.js）。往这之前灌样本数据是有害的：
+  // 数据写进去了、累计积分也涨了，季度页却全按 0 显示，看上去像"脚本灌失败了"。
+  // 与其让人对着一个必然为 0 的结果排查，不如在这里直接拒绝。
+  // --status 放行 —— 看一眼旧季度是合法需求。
+  if (mode !== '--status' && !isScoredQuarter(quarter)) {
+    console.error(
+      `${formatQuarter(quarter)} 在计分起点（${formatQuarter(SCORING_START_QUARTER)}）之前，不计分，不能灌样本数据。`
+    );
     process.exit(1);
   }
 
