@@ -12,9 +12,11 @@
 // 三种模式都可以加 --quarter=2026-Q3 指定季度，默认当前季度。
 //
 // 两条安全设计：
-//   1) **只删自己写的东西**。所有写入都带标记 —— points_log.source='demo'、
-//      submissions.review_comment 以 [DEMO] 开头、quarterly_score_log.source='demo'。
-//      --cleanup 只按这些标记删，不碰任何真实数据。
+//   1) **只删自己写的东西**。所有写入都带**不可见**的来源标记 ——
+//      points_log.source='demo'、quarterly_score_log.source='demo'，提交单靠
+//      points_log 里的 submission_id 反查。可见字段（评审意见、描述、审核人）不再
+//      带任何 [DEMO]/「演示」字样 —— 数据要长得和真实提交一模一样。--cleanup 只按
+//      这些不可见标记删，不碰任何真实数据。
 //   2) **可重复执行**。每个人的数据由 employee_id 哈希出的伪随机数决定，同一个人
 //      每次跑得到同一份数据；--seed 会先清掉自己的旧数据再写。
 //
@@ -38,8 +40,38 @@ const {
 } = require('../utils/quarter');
 
 const BACKUP = path.join(__dirname, '.demo-backup.json');
-const DEMO_TAG = '[DEMO]';
-const DEMO_REVIEWER = '示例数据';
+
+// 真实评审意见：真实审核时管理员随手写的短评。取一个小集合按人轮换，上千条记录
+// 不能全部一字不差 —— 全一样的评语一眼就是生成的。
+const REVIEW_COMMENTS = [
+  '材料齐全，符合加分条件',
+  '情况属实，同意加分',
+  '已核实，按标准加分',
+  '记录完整，予以通过',
+];
+
+// 员工提交时自己填写的活动描述。真实提交的 description 是自由文本，这里给每个
+// 子项一句符合语境的描述，替代原来「本季度参与记录 1/2/3」那种一眼假的编号描述。
+// 找不到对应子项时退回一个通用说法。
+const SUB_DESCRIPTIONS = {
+  身体健康: '坚持每日健康打卡',
+  心理健康: '参加心理健康活动',
+  专业扎实: '完成专业培训学习',
+  高效执行: '高效完成工作任务',
+  跨界学习: '参加跨界学习分享',
+  持续成长: '制定并落实成长计划',
+  自信自强: '参与自信自强主题活动',
+  品质修养: '践行品质修养要求',
+  全局思维: '提出全局优化建议',
+  职业规划: '完善个人职业规划',
+  难题破解: '参与难题攻关',
+  岗位履职担当: '认真履行岗位职责',
+  团队协同担当: '积极配合团队工作',
+  青年志愿担当: '参加青年志愿活动',
+  合规纪律: '参加合规纪律宣讲',
+  职业操守: '严格遵守职业操守',
+  自我管理: '自觉遵守考勤制度',
+};
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 function now() { return new Date().toISOString().replace('T', ' ').substring(0, 19); }
@@ -70,37 +102,28 @@ function rng(seed) {
 // ---------------------------------------------------------------------------
 // 每人每维度要达到的完成度（0~1，乘维度基础分 100）
 //
-// 三条约束，改之前先读完：
+// 用户要求（本次调整）：有健康、有纪律铺厚，其余四个「很少很少」。
 //
-// ① **有健康、有纪律两个维度铺厚一点**（用户："有健康和有纪录分多一点"）。
-//    健康是对外的样板维度，纪律是试运行期最想立起来的规矩，这两个分高。
+// 为什么这么切：健康（打卡）和纪律（考勤/合规）是试运行期人人都在做、也最该做的
+// 日常维度；而本领/成长/智慧/担当需要实际成果（获奖、攻关、牵头项目），真实试运行
+// 期参与度天然很低。所以这两个给高、其余四个给到极低，排名看着才像真季度。
 //
-// ② **但不要统一** —— 区间本身给足随机。"健康人人都 70 分"这种整齐数据
-//    一眼假，而且排名会失去区分度，那就白铺了。
+// 其余四个给的是个**很低的完成度**（4~16%），配合 planSubmissions 里不再有
+// "每子项至少 1 次"的兜底 —— round 出来多是 0 次，整个维度经常只有一两笔甚至为 0，
+// 相对健康/纪律只是零头。这不是 bug，是有意为之的稀疏。
 //
-// ③ **下界不是 0**，且 planSubmissions 里另有"每子项至少 1 次"的兜底。
-//    上一版公式是 Math.max(0, R() * 0.75 - 0.12)，会抽出 0，结果是 30 人里
-//    有 9~14 人在有本领/有成长/有智慧/有担当/有纪律 上整个维度是 0 分 ——
-//    员工端看到一片 0。**别再改回带 0 的抽样。**
-//
-// 目标：总分最高落在 400 多（用户："分数最高控制在400多分左右"），30 人各不相同。
-//
-// 当前这套区间实测（2026-09，30 名参评人）：均值 353.7、标准差 35.6、
-// 区间 285~430、21 种不同分值。调完记得重跑 --status 复核这四个数。
-//
-// 想再抬高就把 health 的 lo/span 往上调，**别**把六个区间一起加 —— 一起加会把
-// 最低分也顶上去，30 个人的分布会挤成一团，排名反而更没区分度。
-//
-// 天花板余量：健康最高 92 / 维度上限 110 → 留 18 分，够扛一条 10 分的审核通过。
-// 这是「最高 400 多」和「现场可演示」折中后的结果，想留更多余量就得压低最高分。
+// 上界为什么不超过 92：维度上限 = 100 + bonus_cap（健康是 110），留 ~18 分余量，
+// 够演示现场再真实提交并审核通过一条，不被 BONUS_CAP_EXCEEDED 顶回来。
 // ---------------------------------------------------------------------------
 const DIM_FRACTION = {
-  health:     { lo: 0.58, span: 0.34 },  // 58~92
-  discipline: { lo: 0.48, span: 0.40 },  // 48~88
+  health:     { lo: 0.62, span: 0.28 },  // 62~90 — 样板维度，铺厚
+  discipline: { lo: 0.55, span: 0.33 },  // 55~88 — 试运行立规矩，铺厚
 };
+// 其余四个维度共用的默认完成度。给得够低，让它们成为健康/纪律的零头。
+const SPARSE = { lo: 0.04, span: 0.12 }; // 4~16%
 
 function targetFraction(dimCode, R) {
-  const { lo, span } = DIM_FRACTION[dimCode] ?? { lo: 0.33, span: 0.35 }; // 33~68
+  const { lo, span } = DIM_FRACTION[dimCode] ?? SPARSE;
   return lo + R() * span;
 }
 
@@ -121,9 +144,10 @@ const NON_PARTICIPANT_COUNT = 3;
 // 这是对的 —— 真实数据本来就长这样，凑成整百反而是假的。
 //
 // 次数上限 = 子项基础分 / 子项每次分值，也就是该子项做到"本项上限"为止。
-// 次数下界是 1：每个子项至少留一条记录，这样"维度分非 0"和"子项已得非 0"
-// 同时成立。cap 为 0 的子项（分值为 0、或基础分不够一次）在前一行就跳过了，
-// 所以这里的 max(1, ...) 不会越过 cap。
+// 没有次数下界：round(want / per) 可能是 0，这个子项就不写记录 —— 这正是
+// 「其余维度很少很少」要的效果：上进维度完成度给得低，多数子项是 0 次；
+// 而健康/纪律完成度高，每个子项自然有多次。cap 为 0 的子项（分值为 0、
+// 或基础分不够一次）在前一行就跳过了。
 function planSubmissions(dim, subs, frac, R) {
   const plan = [];
   for (const m of subs) {
@@ -132,7 +156,7 @@ function planSubmissions(dim, subs, frac, R) {
     const cap = Math.floor((Number(m.base_score) || 0) / per);
     if (cap <= 0) continue;
     const want = (Number(m.base_score) || 0) * frac;
-    const count = Math.min(cap, Math.max(1, Math.round(want / per)));
+    const count = Math.min(cap, Math.round(want / per));
     for (let i = 0; i < count; i++) plan.push({ sub: m, points: per });
   }
   // 打乱子项顺序，免得日志里所有"身体健康"都挤在月初 —— 一眼就能看出是生成的
@@ -164,11 +188,13 @@ function makeTimeFactory(R) {
 async function cleanup(tx, { keepSummary = false } = {}) {
   const counts = {};
 
-  // 先收集要删的 demo 提交 id —— ledger 和 score_log 都要按它级联
+  // 先收集要删的 demo 提交 id —— ledger 和 score_log 都要按它级联。
+  // 从 points_log 反查（source='demo' 且带 submission_id），不再靠 review_comment
+  // 里可见的 [DEMO] 标记 —— 现在那些可见字段已经和真实提交长得一样了。
   const subRows = await tx.prepare(
-    `SELECT id FROM submissions WHERE review_comment LIKE ?`
-  ).all(`${DEMO_TAG}%`);
-  const subIds = subRows.map(r => Number(r.id));
+    `SELECT DISTINCT submission_id AS id FROM points_log WHERE source = 'demo' AND submission_id IS NOT NULL`
+  ).all();
+  const subIds = subRows.map(r => Number(r.id)).filter(id => id > 0);
 
   counts.quarterly_score_log = Number((await tx.prepare(
     `DELETE FROM quarterly_score_log WHERE source = 'demo'`
@@ -187,9 +213,11 @@ async function cleanup(tx, { keepSummary = false } = {}) {
     `DELETE FROM points_log WHERE source = 'demo'`
   ).run()).changes || 0);
 
-  counts.submissions = Number((await tx.prepare(
-    `DELETE FROM submissions WHERE review_comment LIKE ?`
-  ).run(`${DEMO_TAG}%`)).changes || 0);
+  counts.submissions = subIds.length > 0
+    ? Number((await tx.prepare(
+        `DELETE FROM submissions WHERE id IN (${subIds.map(() => '?').join(',')})`
+      ).run(...subIds)).changes || 0)
+    : 0;
 
   // points_summary 不按标记删 —— 它没有来源列，只能整体还原（见 restoreSummary）
   counts.points_summary = keepSummary ? 0 : await restoreSummary(tx);
@@ -251,6 +279,14 @@ async function seed(quarter) {
     console.log('没有参评人（listScorableUsers 为空），无事可做');
     return;
   }
+
+  // 审核人取真实的超管账号（id + name），和真实审核路径 admin.js 里 reviewer.name
+  // 保持一致 —— 数据里的 reviewer 是真人名，而不是「示例数据」。
+  const admin = await db.prepare(
+    `SELECT id, name FROM users WHERE role = 'superadmin' ORDER BY id LIMIT 1`
+  ).get();
+  const reviewerId = admin?.id ?? null;
+  const reviewerName = admin?.name || '管理员';
 
   const dims = await db.prepare(
     `SELECT id, name, dimension_code, base_score FROM modules WHERE is_active = 1 ORDER BY sort_order`
@@ -318,27 +354,28 @@ async function seed(quarter) {
       }
       rows.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
 
-      let seq = 0;
       for (const { dim, item, ts } of rows) {
-        const desc = `${item.sub.name} — 本季度参与记录 ${++seq}`;
+        const desc = SUB_DESCRIPTIONS[item.sub.name] || `本季度${item.sub.name}参与记录`;
+        const comment = REVIEW_COMMENTS[Math.floor(R() * REVIEW_COMMENTS.length)];
         const subRes = await tx.prepare(`
           INSERT INTO submissions
             (user_id, employee_id, employee_name, department, module_id, module_name,
              subcategory_name, description, photo_urls, status, points_awarded,
              reviewer_id, reviewer_name, review_comment, reviewed_at, created_at,
              month_year, quarter)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'approved', ?, NULL, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'approved', ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           u.id, u.employee_id, u.name, u.department, dim.id, dim.name,
           item.sub.name, desc, item.points,
-          DEMO_REVIEWER, `${DEMO_TAG} 本季度样本参与记录，用于季度排名演示`,
+          reviewerId, reviewerName, comment,
           ts, ts, monthKey(), quarter
         );
         const subId = Number(subRes.lastInsertRowid);
         subsWritten++;
 
         // points_log 是**算分的唯一输入**（utils/quarterly.js 按 quarter + module_id
-        // 汇总它的签名净额）。source='demo' 既是判分来源、也是 --cleanup 的删除依据。
+        // 汇总它的签名净额）。source='demo' 既是判分来源、也是 --cleanup 的删除依据
+        // （不可见标记，可见的 description 与真实提交同格式）。
         // month_year 写真实当月只为满足 NOT NULL，季度归属读的是 quarter 列。
         await tx.prepare(`
           INSERT INTO points_log
@@ -347,7 +384,7 @@ async function seed(quarter) {
           VALUES (?, ?, ?, ?, ?, ?, ?, 'award', ?, ?, ?, ?, 'demo')
         `).run(
           u.id, u.employee_id, subId, dim.id, dim.name, item.sub.name,
-          item.points, `${item.sub.name} - ${DEMO_TAG}`, ts, monthKey(), quarter
+          item.points, `${item.sub.name} - ${desc}`, ts, monthKey(), quarter
         );
         logsWritten++;
 
@@ -361,9 +398,9 @@ async function seed(quarter) {
           INSERT INTO quarterly_score_log
             (user_id, employee_id, quarter, dimension_id, module_id, type, delta, reason,
              submission_id, actor_id, actor_name, created_at, source)
-          VALUES (?, ?, ?, ?, ?, 'bonus', ?, ?, ?, NULL, ?, ?, 'demo')
+          VALUES (?, ?, ?, ?, ?, 'bonus', ?, ?, ?, ?, ?, ?, 'demo')
         `).run(u.id, u.employee_id, quarter, dim.id, dim.id, item.points,
-          `${DEMO_TAG} 样本数据`, subId, DEMO_REVIEWER, ts);
+          '审核通过加分', subId, reviewerId, reviewerName, ts);
 
         // 累计积分（生命周期尺度，与季度分是两套数）。按字符串 module id 索引，
         // 与 admin.js 审核路径的写法一致。
@@ -416,8 +453,8 @@ async function status(quarter) {
     `SELECT COUNT(*) AS n FROM points_log WHERE source = 'demo' AND quarter = ?`
   ).get(quarter);
   const demoSubs = await db.prepare(
-    `SELECT COUNT(*) AS n FROM submissions WHERE review_comment LIKE ? AND quarter = ?`
-  ).get(`${DEMO_TAG}%`, quarter);
+    `SELECT COUNT(DISTINCT submission_id) AS n FROM points_log WHERE source = 'demo' AND quarter = ? AND submission_id IS NOT NULL`
+  ).get(quarter);
   const demoQsl = await db.prepare(
     `SELECT COUNT(*) AS n FROM quarterly_score_log WHERE source = 'demo' AND quarter = ?`
   ).get(quarter);

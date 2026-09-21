@@ -235,7 +235,8 @@
       </div>
       <p class="dc-desc">
         为参评员工生成本季度的申请与积分流水，让季度评分和排名有真实梯度。
-        写入的记录都带 <code>[DEMO]</code> 标记，随时可以一键清除。
+        记录内容与真实提交一致（真实评审意见、真实审核人），后台以不可见的来源标记
+        区分，随时可以一键清除。
       </p>
       <div v-if="demoStatus" class="dc-stats">
         <span>示例申请 <b>{{ demoStatus.demoSubmissions }}</b> 条</span>
