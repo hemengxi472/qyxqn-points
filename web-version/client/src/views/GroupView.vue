@@ -2,7 +2,7 @@
   <div>
     <h3 class="page-title">🤝 团队任务</h3>
 
-    <!-- 当月团队 -->
+    <!-- 本季度团队 -->
     <div v-if="group" class="current-group">
       <div class="group-status-bar" :class="`status-${group.status}`">
         <StatusBadge :status="statusBadge" />
@@ -11,7 +11,7 @@
 
       <div class="group-card">
         <h3 class="g-name">{{ group.name }}</h3>
-        <p class="g-month">{{ group.monthYear }}</p>
+        <p class="g-month">{{ formatQuarter(group.quarter) }}</p>
 
         <!-- 成员 -->
         <div class="g-section">
@@ -31,7 +31,7 @@
         <div class="g-section">
           <h4>任务要求</h4>
           <p v-if="group.taskRequirement" class="g-desc">{{ group.taskRequirement }}</p>
-          <p v-else class="g-desc g-placeholder">等待管理员设置本月统一任务...</p>
+          <p v-else class="g-desc g-placeholder">等待管理员设置本季度统一任务...</p>
         </div>
 
         <!-- 完成描述 -->
@@ -73,7 +73,7 @@
     </div>
 
     <!-- 无团队 -->
-    <EmptyState v-else text="本月暂无团队任务，请等待管理员分组" />
+    <EmptyState v-else text="本季度暂无团队任务，请等待管理员分组" />
 
     <!-- 提交弹窗 -->
     <el-dialog v-model="showDialog" title="提交团队任务" width="500px" destroy-on-close @open="description = ''; photos = []">
@@ -102,7 +102,7 @@
       <div class="hist-list">
         <div v-for="g in history" :key="g.id" class="hist-item">
           <span class="hi-name">{{ g.name }}</span>
-          <span class="hi-month">{{ g.monthYear }}</span>
+          <span class="hi-month">{{ formatQuarter(g.quarter) }}</span>
           <span class="hi-status" :class="`hi-${g.status}`">{{ statusMap[g.status] }}</span>
         </div>
       </div>
@@ -114,6 +114,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
+import { formatQuarter } from '../utils/quarter'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoUploader from '../components/PhotoUploader.vue'

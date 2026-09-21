@@ -61,6 +61,9 @@
             <el-menu-item index="/admin/stats">
               <span class="menu-emoji">📊</span><span>数据统计</span>
             </el-menu-item>
+            <el-menu-item index="/admin/quarterly">
+              <span class="menu-emoji">🏅</span><span>季度评分</span>
+            </el-menu-item>
             <el-menu-item index="/admin/employees">
               <span class="menu-emoji">👤</span><span>员工管理</span>
             </el-menu-item>

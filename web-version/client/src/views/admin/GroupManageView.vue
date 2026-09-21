@@ -7,30 +7,30 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:6px">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
           </svg>
-          生成本月团队
+          生成本季度团队
         </el-button>
       </div>
     </div>
 
-    <!-- 本月统一任务 -->
+    <!-- 本季度统一任务 -->
     <div class="monthly-task-card">
-      <h4>本月统一任务 <span class="task-badge">所有团队共用</span></h4>
+      <h4>本季度统一任务 <span class="task-badge">所有团队共用</span></h4>
       <el-input
-        v-model="monthlyTaskDesc"
+        v-model="quarterTaskDesc"
         type="textarea"
         :rows="3"
-        placeholder="输入本月所有团队的统一任务要求..."
+        placeholder="输入本季度所有团队的统一任务要求..."
       />
       <div class="task-actions">
-        <el-button type="primary" size="small" :loading="savingTask" @click="saveMonthlyTask">
+        <el-button type="primary" size="small" :loading="savingTask" @click="saveQuarterTask">
           保存统一任务
         </el-button>
-        <span v-if="!monthlyTaskDesc && !savingTask" class="task-hint">尚未设置本月任务，成员将看到空白任务描述</span>
+        <span v-if="!quarterTaskDesc && !savingTask" class="task-hint">尚未设置本季度任务，成员将看到空白任务描述</span>
       </div>
     </div>
 
     <div v-if="groups.length === 0 && !loading" class="empty-wrap">
-      <EmptyState text="暂无团队数据，点击上方按钮生成本月团队" />
+      <EmptyState text="暂无团队数据，点击上方按钮生成本季度团队" />
     </div>
 
     <div v-else class="group-list">
@@ -70,7 +70,7 @@
 
         <!-- 统一任务要求（只读） -->
         <h4 class="detail-label" style="margin-top:20px">统一任务要求</h4>
-        <p class="detail-text">{{ monthlyTaskDesc || '未设置' }}</p>
+        <p class="detail-text">{{ quarterTaskDesc || '未设置' }}</p>
 
         <!-- 提交内容 -->
         <template v-if="detailSubmission">
@@ -123,6 +123,12 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 import EmptyState from '../../components/EmptyState.vue'
+import { quarterKey } from '../../utils/quarter'
+
+// 团队任务已季度化。取"当前季度"必须走本地时区（utils/quarter 的 quarterKey），
+// 不能用 new Date().toISOString() —— 那是 UTC，在 UTC+8 下每季度第一天的
+// 00:00–08:00 会把团队生成到上一个季度去。
+const currentQuarter = () => quarterKey()
 
 const groups = ref([])
 const loading = ref(false)
@@ -133,34 +139,32 @@ const dialogVisible = ref(false)
 const detailGroup = ref(null)
 const detailMembers = ref([])
 const detailSubmission = ref(null)
-const monthlyTaskDesc = ref('')
+const quarterTaskDesc = ref('')
 const savingTask = ref(false)
 
 const statusMap = { active: '进行中', submitted: '已提交', approved: '已通过', rejected: '已驳回' }
 
-onMounted(() => { loadGroups(); loadMonthlyTask() })
+onMounted(() => { loadGroups(); loadQuarterTask() })
 
 async function loadGroups() {
   loading.value = true
   try {
-    const data = await api.get('/admin/groups', { params: { monthYear: new Date().toISOString().substring(0, 7) } })
+    const data = await api.get('/admin/groups', { params: { quarter: currentQuarter() } })
     groups.value = data.groups
   } finally { loading.value = false }
 }
 
 async function loadMonthlyTask() {
-  const monthYear = new Date().toISOString().substring(0, 7)
   try {
-    const data = await api.get(`/admin/tasks/${monthYear}`)
-    monthlyTaskDesc.value = data.task ? data.task.taskDescription : ''
+    const data = await api.get(`/admin/tasks/${currentQuarter()}`)
+    quarterTaskDesc.value = data.task ? data.task.taskDescription : ''
   } catch { /* */ }
 }
 
-async function saveMonthlyTask() {
+async function saveQuarterTask() {
   savingTask.value = true
-  const monthYear = new Date().toISOString().substring(0, 7)
   try {
-    await api.post('/admin/tasks', { monthYear, taskDescription: monthlyTaskDesc.value })
+    await api.post('/admin/tasks', { quarter: currentQuarter(), taskDescription: quarterTaskDesc.value })
     ElMessage.success('统一任务已保存')
   } finally { savingTask.value = false }
 }
@@ -198,7 +202,7 @@ async function handleDelete(g) {
 async function handleReview(g, action) {
   const label = action === 'approved' ? '通过' : '驳回'
   try {
-    await ElMessageBox.confirm(`确定${label}该团队的月度任务提交？`, `确认${label}`, { type: 'info' })
+    await ElMessageBox.confirm(`确定${label}该团队的季度任务提交？`, `确认${label}`, { type: 'info' })
   } catch { return }
 
   reviewing.value = g.id
@@ -225,7 +229,7 @@ async function showDetail(g) {
 
 .empty-wrap { margin-top: 40px; }
 
-/* 月度统一任务 */
+/* 本季度统一任务 */
 .monthly-task-card {
   background: var(--bg-card); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs); border: 1px solid var(--ink-100);

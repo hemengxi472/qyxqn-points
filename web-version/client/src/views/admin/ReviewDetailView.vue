@@ -51,8 +51,49 @@
             <el-input v-model="comment" type="textarea" :rows="3" placeholder="填写审核意见或拒绝原因..." />
           </el-form-item>
           <el-form-item label="审批积分">
-            <el-input-number v-model="reviewPoints" :min="0" :max="100" size="large" style="width:150px" />
+            <el-input-number
+              v-model="reviewPoints"
+              :min="0"
+              :max="bonusContext ? bonusContext.remaining : 100"
+              size="large"
+              style="width:150px"
+            />
           </el-form-item>
+
+          <!-- 加分上限提示。服务端校验才是准绳，这里只是让"填完才被拒"少发生。
+               遗留模块（bonus_cap = 0）没有 bonusContext，不显示。 -->
+          <el-alert
+            v-if="bonusContext"
+            :type="bonusContext.remaining === 0 ? 'warning' : 'info'"
+            show-icon
+            :closable="false"
+            style="margin-bottom:16px"
+            :title="`${bonusContext.dimensionName} · 本季度附加加分 ${bonusContext.granted}/${bonusContext.bonusCap} 分，剩余 ${bonusContext.remaining} 分`"
+            :description="bonusContext.remaining === 0
+              ? '本季度该维度加分额度已用完，再通过会占用下一季度的额度或需要先撤销此前的审核。'
+              : `本次最多可填 ${bonusContext.remaining} 分，超出会被拒绝。填 0 表示「通过但不加分」。`"
+          />
+
+          <!-- 作假是季度级的归零，六个维度全 0，比单维度刚性归零严重得多。
+               放在上面那条之前，因为它是更根本的原因。 -->
+          <el-alert
+            v-if="bonusContext?.fraudZero"
+            type="error"
+            show-icon
+            :closable="false"
+            style="margin-bottom:16px"
+            title="该员工本季度因弄虚作假被归零"
+            :description="`原因：${bonusContext.fraudReason || '未填写'}。本季度六个评价维度均为 0 分、奖励资格已取消。通过本条申请会正常入账加分，但分数不会显示，直到作假记录被撤销。`"
+          />
+          <el-alert
+            v-if="bonusContext?.hardZero"
+            type="error"
+            show-icon
+            :closable="false"
+            style="margin-bottom:16px"
+            :title="`该员工本季度「${bonusContext.dimensionName}」已被刚性归零`"
+            :description="`原因：${bonusContext.hardZeroReason || '未填写'}。通过本条申请会正常入账加分，但该维度仍显示 0 分，直到归零被解除。`"
+          />
           <div class="review-actions">
             <el-button type="success" size="large" :loading="reviewing" class="action-btn" @click="handleApprove">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px">
@@ -86,6 +127,7 @@ import PhotoPreview from '../../components/PhotoPreview.vue'
 const route = useRoute()
 const router = useRouter()
 const submission = ref(null)
+const bonusContext = ref(null)
 const comment = ref('')
 const reviewPoints = ref(0)
 const reviewing = ref(false)
@@ -95,6 +137,7 @@ const previewIndex = ref(0)
 onMounted(async () => {
   const data = await api.get(`/admin/reviews/${route.params.id}`)
   submission.value = data.submission
+  bonusContext.value = data.bonusContext || null
   reviewPoints.value = data.submission.pointsAwarded || 0
 })
 

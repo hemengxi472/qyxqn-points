@@ -8,10 +8,13 @@
 
     <p class="page-sub">选择该模块下的积分子项进行申请</p>
 
-    <div v-if="moduleIdNum === 4" class="empty-discipline">
+    <!-- 必须是「有纪律 且 没有子项」才显示团队任务说明。
+         旧代码只判 id === 4，迁移后「有纪律」有 3 个真实模块，
+         那个条件会把它们从员工眼前整个藏掉。 -->
+    <div v-if="isDiscipline && subcategories.length === 0" class="empty-discipline">
       <div class="discipline-icon">⚖️</div>
-      <h3>纪律积分通过团队任务获得</h3>
-      <p>纪律模块的积分由管理员每月统一设置团队任务，完成后由任意成员提交即可为全队发放积分。</p>
+      <h3>有纪律积分通过团队任务获得</h3>
+      <p>有纪律模块的积分由管理员每季度统一设置团队任务，完成后由任意成员提交即可为全队发放积分。</p>
       <el-button type="primary" size="large" @click="$router.push('/group')">前往团队任务</el-button>
     </div>
 
@@ -22,7 +25,7 @@
     <div v-else class="sub-list">
       <div
         v-for="(sub, i) in subcategories"
-        :key="sub.name"
+        :key="sub.id"
         class="sub-card"
         :style="{ animationDelay: `${i * 0.06}s` }"
         @click="goSubmit(sub)"
@@ -31,11 +34,16 @@
           <div class="sub-info">
             <span class="sub-name">{{ sub.name }}</span>
             <span class="sub-desc">{{ sub.description }}</span>
+            <span v-if="sub.scoreRule" class="sub-rule">📋 {{ sub.scoreRule }}</span>
+            <span v-if="sub.evidenceRequired" class="sub-evidence">佐证：{{ sub.evidenceRequired }}</span>
             <span v-if="sub.maxTimes > 0" class="sub-limit">每年限 {{ sub.maxTimes }} 次</span>
           </div>
           <div class="sub-points-box">
+            <!-- baseScore = 季度基础分，points = 参考加分/次。两个不同的数，
+                 不要合并成"X 分"一个数字展示。 -->
+            <span class="sub-base">基础分 {{ sub.baseScore }}</span>
             <span class="sub-points">{{ sub.points }}</span>
-            <span class="sub-unit">分 / 次</span>
+            <span class="sub-unit">参考加分 / 次</span>
           </div>
         </div>
         <div class="sub-footer">
@@ -55,9 +63,15 @@ import api from '../api'
 const route = useRoute()
 const router = useRouter()
 const moduleId = ref(route.params.moduleId)
-const moduleIdNum = computed(() => Number(moduleId.value))
 const moduleName = ref(route.query.moduleName || '积分子项')
 const subcategories = ref([])
+const dimensionCode = ref('')
+const loadedId = ref(null)
+
+// 有纪律走团队任务。回退到 id === 4 是为了容忍滚动发布期间 dist 与 API 版本错配。
+const isDiscipline = computed(
+  () => dimensionCode.value === 'discipline' || (!dimensionCode.value && loadedId.value === 4)
+)
 
 onMounted(async () => {
   const data = await api.get('/modules')
@@ -65,6 +79,8 @@ onMounted(async () => {
   if (mod) {
     moduleName.value = mod.name
     subcategories.value = mod.subcategories
+    dimensionCode.value = mod.dimensionCode || ''
+    loadedId.value = mod.id
   }
 })
 
@@ -122,7 +138,14 @@ function goSubmit(sub) {
   border: 1px solid #FDE2B8;
 }
 
+.sub-rule { font-size: 12px; color: var(--text-secondary); line-height: 1.7; }
+.sub-evidence { font-size: 11px; color: var(--text-placeholder); line-height: 1.6; }
+
 .sub-points-box { text-align: center; flex-shrink: 0; }
+.sub-base {
+  display: block; font-size: 12px; font-weight: 700; color: var(--text-primary);
+  background: var(--ink-50); border-radius: 12px; padding: 3px 10px; margin-bottom: 6px;
+}
 .sub-points { font-size: 34px; font-weight: 900; color: var(--primary); line-height: 1; }
 .sub-unit { font-size: 11px; color: var(--text-secondary); display: block; margin-top: 2px; font-weight: 500; }
 

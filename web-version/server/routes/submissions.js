@@ -1,6 +1,7 @@
 const express = require('express');
 const { db } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { monthKey, quarterKey } = require('../utils/quarter');
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
@@ -58,11 +59,13 @@ router.post('/', authMiddleware, async (req, res) => {
     }
   }
 
+  // 季度在提交时冻结（决策：加分按提交时间归属，季末提交的材料不会因为
+  // 跨月审核而跑到下个季度）。用本地时间的 monthKey，不用 toISOString（UTC）。
   const result = await db.prepare(`
-    INSERT INTO submissions (user_id, employee_id, employee_name, department, module_id, module_name, subcategory_name, description, photo_urls, month_year)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO submissions (user_id, employee_id, employee_name, department, module_id, module_name, subcategory_name, description, photo_urls, month_year, quarter)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(user.id, user.employee_id, user.name, user.department, moduleId, module.name, subcategoryName, description || '', JSON.stringify(photoUrls || []),
-    new Date().toISOString().substring(0, 7));
+    monthKey(), quarterKey());
 
   const submission = await db.prepare('SELECT * FROM submissions WHERE id = ?').get(result.lastInsertRowid);
   res.json({ submission: formatSubmission(submission) });

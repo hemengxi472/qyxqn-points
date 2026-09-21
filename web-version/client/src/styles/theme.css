@@ -80,7 +80,32 @@
   --sidebar-collapsed: 64px;
   --header-height: 60px;
 
-  /* === 模块专属色 (Candy Pastel) === */
+  /* === 六大评价维度专属色 (Candy Pastel) ===
+     键是服务端下发的 dimension_code，不是中文名也不是 id。
+     duty 用青而不用珊瑚：它和 discipline、--primary 同属红系，
+     六个格子并排时会糊成一片。 */
+  --module-health: #5EC492;
+  --module-health-light: #EDFAF3;
+  --module-health-border: #B8E8CE;
+  --module-skill: #6BA3FF;
+  --module-skill-light: #EDF4FF;
+  --module-skill-border: #C5DAFF;
+  --module-growth: #F5A623;
+  --module-growth-light: #FFF8ED;
+  --module-growth-border: #FDE2B8;
+  --module-wisdom: #A78BFA;
+  --module-wisdom-light: #F4F0FF;
+  --module-wisdom-border: #DCD0FF;
+  --module-duty: #4BC0C8;
+  --module-duty-light: #EBF9FA;
+  --module-duty-border: #B3E6EA;
+  --module-discipline: #FF7B8A;
+  --module-discipline-light: #FFF0F3;
+  --module-discipline-border: #FFC5CC;
+
+  /* === 旧四模块色，保留一版不删 ===
+     dimension_code 为空的历史模块、以及滚动发布期间 dist 与 API 版本错配时，
+     前端会回退到这里。删掉会让半迁移状态出现未定义变量（样式直接失效）。 */
   --module-ability: #6BA3FF;
   --module-ability-light: #EDF4FF;
   --module-ability-border: #C5DAFF;
@@ -90,9 +115,6 @@
   --module-morality: #F5A623;
   --module-morality-light: #FFF8ED;
   --module-morality-border: #FDE2B8;
-  --module-discipline: #FF7B8A;
-  --module-discipline-light: #FFF0F3;
-  --module-discipline-border: #FFC5CC;
 
   /* === 状态色 === */
   --status-pending: #F5A623;

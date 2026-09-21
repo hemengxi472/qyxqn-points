@@ -58,10 +58,10 @@
       </div>
     </div>
 
-    <!-- 本月团队任务 -->
+    <!-- 本季度团队任务 -->
     <div v-if="stats?.groups" class="group-card">
       <div class="group-card-head">
-        <h4>🤝 本月团队任务</h4>
+        <h4>🤝 本季度团队任务</h4>
         <el-button size="small" class="group-link-btn" @click="$router.push('/admin/groups')">
           前往团队管理 &rarr;
         </el-button>
@@ -99,7 +99,7 @@
         </div>
       </div>
       <div v-else-if="stats.groups.total === 0" class="group-empty">
-        本月尚未生成团队，请前往团队管理生成本月团队
+        本季度尚未生成团队，请前往团队管理生成本季度团队
       </div>
     </div>
 
@@ -107,10 +107,18 @@
     <div v-if="stats?.pointsByModule?.length" class="chart-card">
       <h4>各模块积分分布</h4>
       <div class="bar-chart">
-        <div v-for="m in stats.pointsByModule" :key="m.moduleName" class="bar-row">
-          <span class="bar-label">{{ m.moduleName }}</span>
+        <div
+          v-for="m in stats.pointsByModule"
+          :key="m.moduleName"
+          class="bar-row"
+          :class="{ 'bar-inactive': !m.isActive }"
+        >
+          <span class="bar-label">
+            {{ m.moduleName }}
+            <el-tag v-if="!m.isActive" size="small" type="info" effect="plain">已停用</el-tag>
+          </span>
           <div class="bar-track">
-            <div class="bar-fill" :class="barColorClass(m.moduleName)" :style="{ width: barWidth(m.total) }">
+            <div class="bar-fill" :class="barColorClass(m)" :style="{ width: barWidth(m.total) }">
               <span v-if="m.total > 0" class="bar-val">{{ m.total }} 分</span>
             </div>
           </div>
@@ -149,9 +157,18 @@ onMounted(async () => {
 const maxPoints = () => Math.max(...(stats.value?.pointsByModule?.map(m => m.total) || [1]), 1)
 const barWidth = (v) => (v / maxPoints() * 100).toFixed(0) + '%'
 
-const barColorClass = (name) => {
-  const map = { '能力': 'bar-blue', '担当': 'bar-green', '道德': 'bar-gold', '纪律': 'bar-red' }
-  return map[name] || 'bar-blue'
+// 优先按服务端下发的 dimensionCode 配色。中文名回退是给 dimensionCode 为空的
+// 历史模块用的 —— /stats 现在会连停用的旧四模块一起返回（否则历史分布全是 0），
+// 没有回退的话那几根柱子会全部退化成同一个颜色。
+const LEGACY_NAME_CLASS = {
+  能力: 'bar-blue', 担当: 'bar-green', 道德: 'bar-gold', 纪律: 'bar-red',
+  有健康: 'bar-health', 有本领: 'bar-skill', 有成长: 'bar-growth',
+  有智慧: 'bar-wisdom', 有担当: 'bar-duty', 有纪律: 'bar-red'
+}
+
+const barColorClass = (m) => {
+  if (m.dimensionCode) return `bar-${m.dimensionCode}`
+  return LEGACY_NAME_CLASS[m.moduleName] || 'bar-blue'
 }
 </script>
 
@@ -318,11 +335,22 @@ const barColorClass = (name) => {
   transition: width 1s cubic-bezier(0.25, 0.8, 0.25, 1);
   min-width: 2px;
 }
+.bar-health { background: linear-gradient(90deg, var(--module-health), #34d399); }
+.bar-skill { background: linear-gradient(90deg, var(--module-skill), #3b82f6); }
+.bar-growth { background: linear-gradient(90deg, var(--module-growth), #f59e0b); }
+.bar-wisdom { background: linear-gradient(90deg, var(--module-wisdom), #8b5cf6); }
+.bar-duty { background: linear-gradient(90deg, var(--module-duty), #06b6d4); }
+.bar-discipline { background: linear-gradient(90deg, var(--module-discipline), #f87171); }
+/* 旧四模块色，保留一版不删：dimension_code 为空的历史柱子回退到这里 */
 .bar-blue { background: linear-gradient(90deg, var(--module-ability), #3b82f6); }
 .bar-green { background: linear-gradient(90deg, var(--module-responsibility), #34d399); }
 .bar-gold { background: linear-gradient(90deg, var(--module-morality), #f59e0b); }
 .bar-red { background: linear-gradient(90deg, var(--module-discipline), #f87171); }
 .bar-val { font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap; }
+
+/* 停用模块：整行弱化，柱子去饱和。历史积分要看得见，但不该和当前维度抢注意力 */
+.bar-row.bar-inactive .bar-label { color: var(--text-placeholder); }
+.bar-row.bar-inactive .bar-fill { opacity: 0.4; filter: saturate(0.4); }
 
 /* 排行榜 */
 .rank-card {

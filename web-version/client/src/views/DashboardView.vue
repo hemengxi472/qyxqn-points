@@ -37,7 +37,7 @@
         <span class="sprite s6">✨</span>
       </div>
       <div class="hero-content">
-        <p class="hero-label">🌟 我的总积分</p>
+        <p class="hero-label">🌟 我的累计积分</p>
         <div class="hero-points-wrap">
           <span class="hero-points">{{ animatedPoints }}</span>
           <span class="hero-unit">分</span>
@@ -51,19 +51,90 @@
       </div>
     </div>
 
-    <!-- 模块积分卡片 -->
-    <div v-if="moduleBreakdown.length" class="section">
+    <!-- 本季度评价维度 -->
+    <!-- 注意：这是与"累计积分"完全不同的一种尺度，季度每季重置回基础分。
+         两个数绝不能相加或合并展示 —— 一个人可以季度 95 分而累计 0 分。 -->
+    <div v-if="quarterly" class="section">
       <div class="section-header">
-        <h3 class="section-title">📚 各模块积分</h3>
+        <h3 class="section-title">📊 本季度评价维度</h3>
+        <span class="section-hint">{{ formatQuarter(quarterly.quarter) }} · 满分 {{ quarterly.maxScore }}</span>
+      </div>
+
+      <div class="quarter-banner" :class="{ ineligible: !quarterly.eligible }">
+        <div class="qb-left">
+          <span class="qb-label">季度总分</span>
+          <span class="qb-score">{{ quarterly.totalScore }}<small>/{{ quarterly.maxScore }}</small></span>
+        </div>
+        <div class="qb-right">
+          <template v-if="quarterly.eligible">
+            <span class="qb-rank">第 {{ quarterly.rank }} 名</span>
+            <span class="qb-sub">共 {{ quarterly.rankedTotal }} 人参与排名</span>
+            <span class="qb-leave">调休 {{ quarterly.leaveDays }} 天</span>
+          </template>
+          <template v-else>
+            <span class="qb-rank danger">不计入排名</span>
+            <span class="qb-sub">刚性归零 {{ quarterly.hardZeroCount }} 项，本季度奖励资格已取消</span>
+          </template>
+        </div>
+      </div>
+
+      <div class="module-grid">
+        <div
+          v-for="(d, i) in quarterly.dimensions"
+          :key="d.dimensionId"
+          class="module-card"
+          :class="[dimensionClass(d.dimensionCode), 'mc-quarter', { 'mc-zero': d.hardZero }]"
+          :style="{ animationDelay: `${0.08 + i * 0.08}s` }"
+        >
+          <div class="mc-stripe" />
+          <div class="mc-content">
+            <div class="mc-icon-wrap">
+              <span class="mc-icon">{{ d.icon }}</span>
+            </div>
+            <div class="mc-info">
+              <span class="mc-name">{{ d.name }}</span>
+              <span class="mc-points">{{ d.score }} <small>/ {{ d.baseTotal + d.bonusCap }}</small></span>
+              <span class="mc-bonus">加分 {{ d.bonusApplied }}/{{ d.bonusCap }}</span>
+            </div>
+          </div>
+          <el-tooltip v-if="d.hardZero" :content="d.hardZeroReason || '该维度已刚性归零'" placement="top">
+            <el-tag class="mc-zero-tag" size="small" type="danger" effect="dark">已归零</el-tag>
+          </el-tooltip>
+        </div>
+      </div>
+    </div>
+
+    <!-- 累计积分（含历史） -->
+    <div v-if="moduleBreakdown.length || legacyPoints > 0" class="section">
+      <div class="section-header">
+        <h3 class="section-title">📚 累计积分（含历史）</h3>
         <span class="section-hint">点击卡片进入申请</span>
       </div>
       <div class="module-grid">
+        <!-- 历史积分卡：旧四模块停用后，这部分分只存在于 module_points 里，
+             不单独列出来的话老用户会看到一排 0 而总分却不是 0。 -->
+        <div
+          v-if="legacyPoints > 0"
+          class="module-card mc-legacy"
+          :style="{ animationDelay: '0.08s' }"
+        >
+          <div class="mc-stripe" />
+          <div class="mc-content">
+            <div class="mc-icon-wrap">
+              <span class="mc-icon">📦</span>
+            </div>
+            <div class="mc-info">
+              <span class="mc-name">历史积分</span>
+              <span class="mc-points">{{ legacyPoints }} <small>分</small></span>
+            </div>
+          </div>
+        </div>
         <div
           v-for="(m, i) in moduleBreakdown"
           :key="m.moduleId"
           class="module-card"
-          :class="moduleClass(m.moduleId)"
-          :style="{ animationDelay: `${0.08 + i * 0.08}s` }"
+          :class="dimensionClass(m.dimensionCode || legacyCodeOf(m.moduleName))"
+          :style="{ animationDelay: `${0.16 + i * 0.08}s` }"
           @click="$router.push('/modules')"
         >
           <div class="mc-stripe" />
@@ -81,11 +152,11 @@
       </div>
     </div>
 
-    <!-- 本月团队任务 -->
+    <!-- 本季度团队任务 -->
     <div class="section">
       <div class="section-header">
-        <h3 class="section-title">🤝 本月团队任务</h3>
-        <span class="section-hint">{{ monthYear }}</span>
+        <h3 class="section-title">🤝 本季度团队任务</h3>
+        <span class="section-hint">{{ formatQuarter(currentQuarter) }}</span>
       </div>
       <div v-if="group" class="group-card" @click="$router.push('/group')">
         <div class="group-status" :class="`group-${group.status}`">
@@ -96,7 +167,8 @@
           <span class="group-members">
             <span v-for="m in group.members" :key="m.employeeName" class="group-member-tag">{{ m.employeeName }}</span>
           </span>
-          <span v-if="group.taskDescription" class="group-desc">{{ group.taskDescription }}</span>
+          <!-- taskRequirement 是本季度统一任务（管理员设置），不是组自己写的完成描述 -->
+          <span v-if="group.taskRequirement" class="group-desc">{{ group.taskRequirement }}</span>
         </div>
         <span class="group-arrow">&rarr;</span>
       </div>
@@ -107,7 +179,7 @@
             <path d="M3 21v-2a7 7 0 017-7h4a7 7 0 017 7v2" />
           </svg>
         </div>
-        <span class="group-empty-text">本月暂无团队任务，等待管理员分组</span>
+        <span class="group-empty-text">本季度暂无团队任务，等待管理员分组</span>
       </div>
     </div>
 
@@ -146,15 +218,20 @@ import { useRouter } from 'vue-router'
 import api from '../api'
 import EmptyState from '../components/EmptyState.vue'
 import StatusBadge from '../components/StatusBadge.vue'
+import { formatQuarter, quarterKey } from '../utils/quarter'
 
 const router = useRouter()
 const totalPoints = ref(0)
 const animatedPoints = ref(0)
 const moduleBreakdown = ref([])
+const legacyPoints = ref(0)
+const quarterly = ref(null)
 const recentLogs = ref([])
 const group = ref(null)
-const monthYear = ref('')
-const isFraudReset = ref(false)
+// 优先用服务端下发的 currentQuarter：这里渲染的是"团队任务属于哪个季度"，
+// 而团队任务的分组键是服务端算的。本地 quarterKey() 只在首次渲染、接口还没
+// 回来时兜底 —— 否则一个跨季度不关的标签页会给服务端的 Q3 团队贴上 Q4 的标签。
+const currentQuarter = ref(quarterKey())
 
 const today = computed(() => {
   const d = new Date()
@@ -162,9 +239,16 @@ const today = computed(() => {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 星期${week[d.getDay()]}`
 })
 
-const moduleClass = (id) => ({
-  1: 'mc-ability', 2: 'mc-responsibility', 3: 'mc-morality', 4: 'mc-discipline'
-}[id] || '')
+// 按服务端下发的 dimension_code 取样式。中文名回退是给 dimensionCode 为空的
+// 历史模块用的（旧四模块停用后接口仍会返回它们的累计分）。
+const dimensionClass = (code) => (code ? `mc-${code}` : '')
+
+const LEGACY_NAME_CODE = {
+  能力: 'skill', 担当: 'duty', 道德: 'growth', 纪律: 'discipline',
+  有健康: 'health', 有本领: 'skill', 有成长: 'growth',
+  有智慧: 'wisdom', 有担当: 'duty', 有纪律: 'discipline'
+}
+const legacyCodeOf = (name) => LEGACY_NAME_CODE[name] || ''
 
 const groupStatusBadge = computed(() => {
   const map = { active: 'pending', submitted: 'pending', approved: 'approved', rejected: 'rejected' }
@@ -189,12 +273,15 @@ function particleStyle(n) {
 onMounted(async () => {
   try {
     const data = await api.get('/points/dashboard')
+    // totalPoints 仍是生命周期累计（含历史），季度分是另一套尺度的数，
+    // 服务端分字段下发，前端不做任何换算
     totalPoints.value = data.totalPoints
     moduleBreakdown.value = data.moduleBreakdown
+    legacyPoints.value = data.legacyPoints || 0
+    quarterly.value = data.quarterly || null
     recentLogs.value = data.recentLogs
     group.value = data.group
-    monthYear.value = data.monthYear
-    isFraudReset.value = data.isFraudReset
+    if (data.currentQuarter) currentQuarter.value = data.currentQuarter
     animateCount(0, data.totalPoints, 1200)
   } catch { /* handled by interceptor */ }
 })
@@ -358,11 +445,13 @@ function animateCount(from, to, duration) {
 
 .module-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* 6 个维度横排三列两行，比 repeat(4) 更容易读 */
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
 .module-card {
+  position: relative;
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   display: flex;
@@ -381,6 +470,14 @@ function animateCount(from, to, duration) {
 .module-card:active {
   transform: scale(0.97);
 }
+/* 季度卡不可点（维度明细在管理员端），历史积分卡没有对应申请入口。
+   不加这条的话卡片会显示手型光标点下去却什么都不发生。 */
+.module-card.mc-legacy,
+.module-card.mc-quarter { cursor: default; }
+.module-card.mc-legacy:hover,
+.module-card.mc-quarter:hover { transform: none; box-shadow: var(--shadow-sm); }
+.module-card.mc-legacy:active,
+.module-card.mc-quarter:active { transform: none; }
 
 .mc-stripe {
   width: 5px; flex-shrink: 0;
@@ -388,10 +485,17 @@ function animateCount(from, to, duration) {
   transition: width var(--transition-smooth);
 }
 .module-card:hover .mc-stripe { width: 8px; }
+.mc-health .mc-stripe { background: var(--module-health); }
+.mc-skill .mc-stripe { background: var(--module-skill); }
+.mc-growth .mc-stripe { background: var(--module-growth); }
+.mc-wisdom .mc-stripe { background: var(--module-wisdom); }
+.mc-duty .mc-stripe { background: var(--module-duty); }
+.mc-discipline .mc-stripe { background: var(--module-discipline); }
+/* 旧四模块色，保留一版不删：dimension_code 为空的历史模块回退到这里 */
 .mc-ability .mc-stripe { background: var(--module-ability); }
 .mc-responsibility .mc-stripe { background: var(--module-responsibility); }
 .mc-morality .mc-stripe { background: var(--module-morality); }
-.mc-discipline .mc-stripe { background: var(--module-discipline); }
+.mc-legacy .mc-stripe { background: var(--text-placeholder); }
 
 .mc-content {
   flex: 1; padding: 22px 18px;
@@ -403,20 +507,58 @@ function animateCount(from, to, duration) {
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
+.mc-health .mc-icon-wrap { background: var(--module-health-light); }
+.mc-skill .mc-icon-wrap { background: var(--module-skill-light); }
+.mc-growth .mc-icon-wrap { background: var(--module-growth-light); }
+.mc-wisdom .mc-icon-wrap { background: var(--module-wisdom-light); }
+.mc-duty .mc-icon-wrap { background: var(--module-duty-light); }
+.mc-discipline .mc-icon-wrap { background: var(--module-discipline-light); }
 .mc-ability .mc-icon-wrap { background: var(--module-ability-light); }
 .mc-responsibility .mc-icon-wrap { background: var(--module-responsibility-light); }
 .mc-morality .mc-icon-wrap { background: var(--module-morality-light); }
-.mc-discipline .mc-icon-wrap { background: var(--module-discipline-light); }
+.mc-legacy .mc-icon-wrap { background: var(--ink-100); }
 .mc-icon { font-size: 30px; }
 
-.mc-info { display: flex; flex-direction: column; gap: 2px; }
+.mc-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mc-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
 .mc-points { font-size: 26px; font-weight: 900; }
+.mc-health .mc-points { color: var(--module-health); }
+.mc-skill .mc-points { color: var(--module-skill); }
+.mc-growth .mc-points { color: var(--module-growth); }
+.mc-wisdom .mc-points { color: var(--module-wisdom); }
+.mc-duty .mc-points { color: var(--module-duty); }
+.mc-discipline .mc-points { color: var(--module-discipline); }
 .mc-ability .mc-points { color: var(--module-ability); }
 .mc-responsibility .mc-points { color: var(--module-responsibility); }
 .mc-morality .mc-points { color: var(--module-morality); }
-.mc-discipline .mc-points { color: var(--module-discipline); }
+.mc-legacy .mc-points { color: var(--text-secondary); }
 .mc-points small { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
+.mc-bonus { font-size: 11px; color: var(--text-placeholder); }
+
+/* 刚性归零的维度：整卡弱化，红色描边，分数压暗 */
+.module-card.mc-zero { border-color: var(--status-rejected); background: var(--status-rejected-bg); }
+.module-card.mc-zero .mc-points { color: var(--status-rejected); }
+.mc-zero-tag { position: absolute; top: 10px; right: 12px; }
+
+/* ===== 季度横幅 ===== */
+.quarter-banner {
+  display: flex; justify-content: space-between; align-items: center;
+  background: linear-gradient(135deg, #FFF5F3, #FFF8ED);
+  border: 1px solid var(--ink-100);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  margin-bottom: 16px;
+}
+.quarter-banner.ineligible { background: var(--status-rejected-bg); border-color: var(--status-rejected); }
+.qb-left { display: flex; align-items: baseline; gap: 10px; }
+.qb-label { font-size: 13px; color: var(--text-secondary); }
+.qb-score { font-size: 30px; font-weight: 900; color: var(--primary); }
+.qb-score small { font-size: 14px; font-weight: 500; color: var(--text-placeholder); }
+.qb-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.qb-rank { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.qb-rank.danger { color: var(--status-rejected); }
+.qb-sub { font-size: 12px; color: var(--text-placeholder); }
+.qb-leave { font-size: 13px; font-weight: 700; color: var(--accent-gold); }
 
 .mc-arrow {
   display: flex; align-items: center; padding: 0 16px;

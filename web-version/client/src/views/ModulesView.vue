@@ -15,7 +15,7 @@
         v-for="(mod, i) in modules"
         :key="mod.id"
         class="module-card"
-        :class="cardClass(mod.id)"
+        :class="cardClass(mod)"
         :style="{ animationDelay: `${i * 0.1}s` }"
         @click="goModule(mod)"
       >
@@ -55,14 +55,26 @@ onMounted(async () => {
 })
 
 function goModule(mod) {
-  if (mod.id === 4) {
+  // 有纪律走团队任务入口。保留 `!mod.dimensionCode && mod.id === 4` 的回退：
+  // 滚动发布期间浏览器里可能还是旧构建、而接口已经返回新字段（或反过来），
+  // 两条判定并存不会误伤 —— 新维度里没有 id=4 这个模块。
+  const isDiscipline = mod.dimensionCode === 'discipline' || (!mod.dimensionCode && mod.id === 4)
+  if (isDiscipline) {
     router.push('/group')
   } else {
     router.push(`/subcategories/${mod.id}`)
   }
 }
 
-const cardClass = (id) => ({ 1: 'card-ability', 2: 'card-responsibility', 3: 'card-morality', 4: 'card-discipline' }[id] || '')
+// 按服务端下发的 dimensionCode 配色；中文名回退是给 dimensionCode 为空的
+// 历史模块用的（旧四模块停用后仍可能在列表里出现）
+const NAME_CODE = {
+  能力: 'skill', 担当: 'duty', 道德: 'growth', 纪律: 'discipline'
+}
+const cardClass = (mod) => {
+  const code = mod.dimensionCode || NAME_CODE[mod.name]
+  return code ? `card-${code}` : ''
+}
 </script>
 
 <style scoped>
@@ -113,10 +125,16 @@ const cardClass = (id) => ({ 1: 'card-ability', 2: 'card-responsibility', 3: 'ca
   opacity: 0.05;
   transition: all var(--transition-smooth);
 }
+.card-health .mc-bg-pattern { background: var(--module-health); }
+.card-skill .mc-bg-pattern { background: var(--module-skill); }
+.card-growth .mc-bg-pattern { background: var(--module-growth); }
+.card-wisdom .mc-bg-pattern { background: var(--module-wisdom); }
+.card-duty .mc-bg-pattern { background: var(--module-duty); }
+.card-discipline .mc-bg-pattern { background: var(--module-discipline); }
+/* 旧四模块色，保留一版不删：dimension_code 为空的历史模块回退到这里 */
 .card-ability .mc-bg-pattern { background: var(--module-ability); }
 .card-responsibility .mc-bg-pattern { background: var(--module-responsibility); }
 .card-morality .mc-bg-pattern { background: var(--module-morality); }
-.card-discipline .mc-bg-pattern { background: var(--module-discipline); }
 .module-card:hover .mc-bg-pattern {
   transform: scale(1.4);
   opacity: 0.1;
@@ -132,10 +150,15 @@ const cardClass = (id) => ({ 1: 'card-ability', 2: 'card-responsibility', 3: 'ca
   justify-content: center;
   box-shadow: 0 4px 16px rgba(0,0,0,0.04);
 }
+.card-health .mc-icon-box { background: var(--module-health-light); }
+.card-skill .mc-icon-box { background: var(--module-skill-light); }
+.card-growth .mc-icon-box { background: var(--module-growth-light); }
+.card-wisdom .mc-icon-box { background: var(--module-wisdom-light); }
+.card-duty .mc-icon-box { background: var(--module-duty-light); }
+.card-discipline .mc-icon-box { background: var(--module-discipline-light); }
 .card-ability .mc-icon-box { background: var(--module-ability-light); }
 .card-responsibility .mc-icon-box { background: var(--module-responsibility-light); }
 .card-morality .mc-icon-box { background: var(--module-morality-light); }
-.card-discipline .mc-icon-box { background: var(--module-discipline-light); }
 .mc-icon { font-size: 32px; }
 
 .mc-badge {

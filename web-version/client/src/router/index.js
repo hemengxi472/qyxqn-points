@@ -24,6 +24,7 @@ const routes = [
       { path: 'admin/review', name: 'Review', component: () => import('../views/admin/ReviewView.vue'), meta: { admin: true, title: '审核管理' } },
       { path: 'admin/review/:id', name: 'ReviewDetail', component: () => import('../views/admin/ReviewDetailView.vue'), meta: { admin: true, title: '审核详情' } },
       { path: 'admin/stats', name: 'Stats', component: () => import('../views/admin/StatsView.vue'), meta: { admin: true, title: '数据统计' } },
+      { path: 'admin/quarterly', name: 'QuarterlyScore', component: () => import('../views/admin/QuarterlyScoreView.vue'), meta: { admin: true, title: '季度评分' } },
       { path: 'admin/employees', name: 'Employees', component: () => import('../views/admin/EmployeesView.vue'), meta: { admin: true, title: '员工管理' } },
       { path: 'admin/groups', name: 'GroupManage', component: () => import('../views/admin/GroupManageView.vue'), meta: { admin: true, title: '团队管理' } },
       { path: 'admin/fraud', name: 'FraudManage', component: () => import('../views/admin/FraudManageView.vue'), meta: { admin: true, title: '作假管理' } },

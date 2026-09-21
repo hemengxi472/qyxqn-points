@@ -29,7 +29,13 @@
             </span>
           </div>
           <span class="log-desc">{{ log.description }}</span>
-          <span class="log-time">{{ log.createdAt }}</span>
+          <!-- 滚动发布期间服务端可能还没下发 quarter，旧记录宁可只显示时间也不要空标签 -->
+          <span class="log-meta">
+            <span class="log-time">{{ log.createdAt }}</span>
+            <el-tag v-if="log.quarter" size="small" type="info" effect="plain">
+              {{ formatQuarter(log.quarter) }}
+            </el-tag>
+          </span>
         </div>
       </div>
     </div>
@@ -44,6 +50,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from '../api'
+import { formatQuarter } from '../utils/quarter'
 import EmptyState from '../components/EmptyState.vue'
 
 const logs = ref([])
@@ -118,6 +125,7 @@ function loadMore() { loadData() }
 .log-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .log-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .log-desc { font-size: 12px; color: var(--text-secondary); }
+.log-meta { display: flex; align-items: center; gap: 8px; }
 .log-time { font-size: 11px; color: var(--text-placeholder); font-weight: 500; }
 
 .log-points { font-size: 18px; font-weight: 800; flex-shrink: 0; }
