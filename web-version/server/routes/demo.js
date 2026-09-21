@@ -11,18 +11,21 @@
 //   1) **逻辑只有一份**。这里全部转调 scripts/demo-participation.js 导出的函数，
 //      不复制任何"哪些行算 demo 数据"的判断 —— 复制出来的第二份迟早会分叉，
 //      然后 cleanup 删不干净第一次灌进去的东西。
-//   2) **只认 superadmin**。灌数据会一次性写入上千条已通过的申请、并抬高
-//      30 个人的累计积分；清数据会把 points_summary 整行还原。
-//      这不该是普通管理员误点一下就能发生的事。
+//   2) **认管理员（admin 或 superadmin）**。灌数据会一次性写入上千条已通过的
+//      申请、并抬高 30 个人的累计积分；清数据会把 points_summary 整行还原。
+//      本来只放给 superadmin，但线上那个管理账号的角色是什么，本机无从确认，
+//      结果就是"界面上根本没有这个按钮"。能改模块和子项分值的账号本来就是
+//      被信任的，放宽到 admin；收紧时把这里和 ModuleManageView 的 v-if 一起改。
+//      写入与删除仍受约束 3 的季度校验保护，清理也只碰带 demo 标记的行。
 //   3) **拒绝计分起点之前的季度**，与脚本 CLI 的判断一致（见 utils/quarter.js）。
 
 const express = require('express');
-const { authMiddleware, superAdminMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const { quarterKey, isValidQuarter, formatQuarter, isScoredQuarter, SCORING_START_QUARTER } = require('../utils/quarter');
 const demo = require('../scripts/demo-participation');
 
 const router = express.Router();
-router.use(authMiddleware, superAdminMiddleware);
+router.use(authMiddleware, adminMiddleware);
 
 // 季度从 query 取，默认当前季度。校验放在一处，三个接口共用。
 function resolveQuarter(req) {

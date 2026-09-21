@@ -225,9 +225,10 @@
 
     <!-- 示例数据。放在这一页是因为它灌的正是"每个子项得几次分"，和上面的分值
          是同一件事的两端：分值决定一次值多少，示例数据决定得几次。
-         只有超级管理员看得到 —— 后端也按 superadmin 拦，这里不显示只是免得
-         别人点出一个必然 403 的按钮。 -->
-    <div v-if="auth.isSuperAdmin" class="demo-card">
+         管理员即可见，后端也按 admin 拦。原先是只给 superadmin 看，但线上
+         账号的角色本机无从确认，卡片因此可能对管理员藏起来 —— 干脆放宽到 admin，
+         能改模块和子项分值的账号，本来就是被信任的。 -->
+    <div v-if="auth.isAdmin" class="demo-card">
       <div class="dc-head">
         <h4 class="dc-title">示例数据</h4>
         <el-tag size="small" type="info" effect="plain">{{ demoQuarterLabel }}</el-tag>
@@ -300,7 +301,7 @@ const baseScoreMismatch = computed(() => {
 
 onMounted(() => {
   loadModules()
-  if (auth.isSuperAdmin) loadDemoStatus()
+  if (auth.isAdmin) loadDemoStatus()
 })
 
 // ===== 示例数据 =====
