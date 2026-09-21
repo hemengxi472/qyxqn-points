@@ -293,6 +293,7 @@ router.post('/reviews/:id/revert', superAdminMiddleware, async (req, res) => {
 router.get('/employees', async (req, res) => {
   const { department, page = 1, pageSize = 50 } = req.query;
   const offset = (Number(page) - 1) * Number(pageSize);
+  const quarter = quarterKey();
 
   let where = '';
   const params = [];
@@ -306,8 +307,16 @@ router.get('/employees', async (req, res) => {
     SELECT * FROM users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?
   `).all(...params, Number(pageSize), offset);
 
-  const items = await Promise.all(users.map(async (u) => {
-    const summary = await db.prepare('SELECT total_points FROM points_summary WHERE user_id = ?').get(u.id);
+  // 分值统一走季度评分口径（与 /admin/quarterly/ranking 同一套 buildQuarterlyScores），
+  // 不再读 points_summary —— 那是生命周期累计，和季度分是两个尺度，放一起必被当成
+  // "对不上"。只有参评对象（active 员工、未排除排名）才有季度分，其余返回 null。
+  const scorableIds = users
+    .filter(u => u.role === 'employee' && u.status === 'active' && !u.exclude_from_ranking)
+    .map(u => u.id);
+  const scores = await buildQuarterlyScores(db, quarter, scorableIds);
+
+  const items = users.map((u) => {
+    const s = scores.get(u.id);
     return {
       id: u.id,
       employeeId: u.employee_id,
@@ -316,53 +325,52 @@ router.get('/employees', async (req, res) => {
       role: u.role,
       status: u.status,
       excludeFromRanking: !!u.exclude_from_ranking,
-      totalPoints: summary ? summary.total_points : 0,
+      quarterScore: s ? s.totalScore : null,
       createdAt: u.created_at
     };
-  }));
+  });
 
-  res.json({ items, total, page: Number(page), pageSize: Number(pageSize) });
+  res.json({ items, total, page: Number(page), pageSize: Number(pageSize), quarter });
 });
 
 // GET /api/admin/stats
 router.get('/stats', async (_req, res) => {
+  const quarter = quarterKey();
   const empCount = (await db.prepare('SELECT COUNT(*) as cnt FROM users WHERE status = ?').get('active')).cnt;
   const subTotal = (await db.prepare('SELECT COUNT(*) as cnt FROM submissions').get()).cnt;
   const pendingCount = (await db.prepare("SELECT COUNT(*) as cnt FROM submissions WHERE status = 'pending'").get()).cnt;
 
-  // 不能过滤 is_active：旧四模块停用后，历史积分全在它们的 id 下，
-  // 一带 WHERE 柱状图就会把全部历史分布显示成 0。
-  const modules = (await db.prepare(
-    'SELECT id, name, is_active, dimension_code FROM modules ORDER BY sort_order'
-  ).all());
-  const allSummaries = (await db.prepare('SELECT * FROM points_summary').all());
+  // 各维度积分分布 / 排行榜：统一走季度评分（与 /admin/quarterly/ranking 同口径），
+  // 不再读 points_summary —— 那是生命周期累计，和季度分是两个尺度。
+  const users = await listScorableUsers(db);
+  const scores = await buildQuarterlyScores(db, quarter, users.map(u => u.id));
 
-  const pointsByModule = new Map();
-  modules.forEach(m => {
-    pointsByModule.set(m.name, { moduleName: m.name, total: 0, dimensionCode: m.dimension_code || '', isActive: !!m.is_active });
-  });
-  allSummaries.forEach(s => {
-    const mp = JSON.parse(s.module_points || '{}');
-    modules.forEach(m => {
-      const entry = pointsByModule.get(m.name);
-      if (entry) entry.total += mp[String(m.id)] || 0;
-    });
-  });
+  const dims = await db.prepare(
+    'SELECT id, name, dimension_code FROM modules WHERE is_active = 1 ORDER BY sort_order'
+  ).all();
+  const dimIdx = new Map(dims.map((d, i) => [d.id, i]));
+  const pointsByModule = dims.map(d => ({
+    moduleName: d.name, total: 0, dimensionCode: d.dimension_code || '', isActive: true
+  }));
+  for (const u of users) {
+    const s = scores.get(u.id);
+    if (!s) continue;
+    for (const dim of s.dimensions) {
+      const i = dimIdx.get(dim.dimensionId);
+      if (i !== undefined) pointsByModule[i].total += dim.score;
+    }
+  }
 
-  const topEmployees = await Promise.all(
-    allSummaries
-      .sort((a, b) => (b.total_points || 0) - (a.total_points || 0))
-      .slice(0, 10)
-      .map(async (s) => {
-        const emp = await db.prepare('SELECT name, department FROM users WHERE employee_id = ?').get(s.employee_id);
-        return {
-          employeeId: s.employee_id,
-          name: emp ? emp.name : '未知',
-          department: emp ? emp.department : '未知',
-          totalPoints: s.total_points
-        };
-      })
-  );
+  const topEmployees = users
+    .map(u => ({ u, score: (scores.get(u.id) || {}).totalScore || 0 }))
+    .sort((a, b) => b.score - a.score || a.u.id - b.u.id)
+    .slice(0, 10)
+    .map(({ u, score }) => ({
+      employeeId: u.employee_id,
+      name: u.name,
+      department: u.department,
+      totalScore: score
+    }));
 
   const fraudCount = (await db.prepare('SELECT COUNT(*) as cnt FROM fraud_records').get()).cnt;
 
@@ -382,11 +390,12 @@ router.get('/stats', async (_req, res) => {
   `).all(currentQuarter);
 
   res.json({
+    quarter,
     totalEmployees: empCount,
     totalSubmissions: subTotal,
     pendingReview: pendingCount,
     fraudRecords: fraudCount,
-    pointsByModule: [...pointsByModule.values()],
+    pointsByModule,
     topEmployees,
     groups: {
       quarter: currentQuarter,

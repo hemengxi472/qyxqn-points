@@ -105,7 +105,7 @@
 
     <!-- 模块积分柱状图 -->
     <div v-if="stats?.pointsByModule?.length" class="chart-card">
-      <h4>各模块积分分布</h4>
+      <h4>各维度积分分布（本季度）</h4>
       <div class="bar-chart">
         <div
           v-for="m in stats.pointsByModule"
@@ -128,7 +128,7 @@
 
     <!-- 排行榜 -->
     <div v-if="stats?.topEmployees?.length" class="rank-card">
-      <h4>积分排行榜 TOP{{ stats.topEmployees.length }}</h4>
+      <h4>本季度积分排行榜 TOP{{ stats.topEmployees.length }}</h4>
       <div class="rank-list">
         <div v-for="(e, i) in stats.topEmployees" :key="e.employeeId" class="rank-item">
           <span class="rank-num" :class="`rank-${i + 1}`">{{ i + 1 }}</span>
@@ -136,7 +136,7 @@
             <span class="rank-name">{{ e.name }}</span>
             <span class="rank-dept">{{ e.department }}</span>
           </div>
-          <span class="rank-points">{{ e.totalPoints }} <small>分</small></span>
+          <span class="rank-points">{{ e.totalScore }} <small>分</small></span>
         </div>
       </div>
     </div>
