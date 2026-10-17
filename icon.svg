@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1B3A2E"/>
+  <text x="256" y="344" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"
+        font-size="264" font-weight="700" fill="#F5F1E8" text-anchor="middle">减</text>
+</svg>

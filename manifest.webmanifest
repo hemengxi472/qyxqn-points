@@ -1,0 +1,19 @@
+{
+  "name": "减脂日志 · 90 天打卡",
+  "short_name": "减脂日志",
+  "description": "3 个月减脂食谱与训练打卡工具",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F5F1E8",
+  "theme_color": "#1B3A2E",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
