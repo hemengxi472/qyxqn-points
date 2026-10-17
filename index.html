@@ -376,11 +376,15 @@
       </details>
 
       <div class="card">
-        <h2>体重记录</h2>
-        <div class="inline">
+        <h2>体重记录 <span class="muted small" id="weighBadge"></span></h2>
+        <div class="inline" id="weightRow">
           <input id="weight" type="number" step="0.1" inputmode="decimal" placeholder="—">
           <span class="muted">斤</span>
           <span id="weightHint" class="muted small"></span>
+        </div>
+        <p class="muted small" id="weightOff" style="margin:0"></p>
+        <div class="btn-row" id="weighBackRow" style="display:none;margin-top:12px">
+          <button class="btn ghost" id="weighNow">今天补记</button>
         </div>
       </div>
 
@@ -713,6 +717,18 @@
           <label for="setTargetDate">目标日期（可选）</label>
           <input type="date" id="setTargetDate">
         </div>
+        <div class="field">
+          <label for="setWeighDay">每周称重日</label>
+          <select id="setWeighDay">
+            <option value="1">周一</option>
+            <option value="2">周二</option>
+            <option value="3">周三</option>
+            <option value="4">周四</option>
+            <option value="5">周五</option>
+            <option value="6">周六</option>
+            <option value="0">周日</option>
+          </select>
+        </div>
         <div class="btn-row">
           <button class="btn" id="saveSettings">保存设置</button>
         </div>
@@ -868,6 +884,7 @@
     d.days = d.days || {};
     d.shopping = d.shopping || {};
     if (!d.settings.startDate) d.settings.startDate = todayKey();
+    if (typeof d.settings.weighDay !== "number" || d.settings.weighDay < 0 || d.settings.weighDay > 6) d.settings.weighDay = 1;
     Object.keys(d.days).forEach(function(k){
       var day = d.days[k] || {};
       var b = blankDay();
@@ -971,6 +988,60 @@
     return parts.join(" · ");
   }
 
+  var weighBack = false;
+
+  function weighDayIndex() {
+    var v = db.settings.weighDay;
+    return (typeof v === "number" && v >= 0 && v <= 6) ? v : 1;
+  }
+
+  function weekStart(d) {
+    var x = new Date(d);
+    var off = (x.getDay() + 6) % 7;
+    x.setDate(x.getDate() - off);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  }
+
+  function weekWeight() {
+    var s = weekStart(new Date());
+    for (var i = 0; i < 7; i++) {
+      var k = toKey(addDays(s, i));
+      var day = db.days[k];
+      if (day && day.weight > 0) return { k: k, w: day.weight };
+    }
+    return null;
+  }
+
+  function nextWeighDate() {
+    var now = new Date();
+    var diff = (weighDayIndex() - now.getDay() + 7) % 7;
+    if (diff === 0) diff = 7;
+    return addDays(now, diff);
+  }
+
+  function renderWeigh() {
+    var onDay = new Date().getDay() === weighDayIndex();
+    var showInput = onDay || weighBack;
+    $("#weightRow").style.display = showInput ? "" : "none";
+    $("#weighBackRow").style.display = showInput ? "none" : "";
+    $("#weightOff").style.display = showInput ? "none" : "";
+
+    if (showInput) {
+      $("#weighBadge").textContent = onDay ? "本周称重日" : "补记";
+      $("#weightHint").textContent = weightHintText() || (today().weight ? "" : "早起空腹称一次");
+      return;
+    }
+
+    $("#weighBadge").textContent = "";
+    var wk = weekWeight();
+    var nd = nextWeighDate();
+    var ndText = (nd.getMonth() + 1) + "月" + nd.getDate() + "日 " + WEEKDAYS[nd.getDay()];
+    $("#weightOff").textContent = wk
+      ? "本周已记 " + wk.w.toFixed(1) + " 斤 · 下次称重 " + ndText
+      : "每周只称一次，下次称重 " + ndText;
+  }
+
   function renderToday() {
     var d = today();
     var n = planDay();
@@ -1015,6 +1086,7 @@
     $("#todayMenu").innerHTML = menuGrid(menu);
 
     $("#weightHint").textContent = weightHintText();
+    renderWeigh();
     setRing(completion(d));
     bindToday();
   }
@@ -1074,8 +1146,18 @@
       d.weight = isNaN(v) || v <= 0 ? null : Math.round(v * 10) / 10;
       save();
       $("#weightHint").textContent = weightHintText();
+      renderWeigh();
       setRing(completion(d));
     });
+
+    if (!$("#weighNow").dataset.bound) {
+      $("#weighNow").dataset.bound = "1";
+      $("#weighNow").addEventListener("click", function(){
+        weighBack = true;
+        renderWeigh();
+        $("#weight").focus();
+      });
+    }
 
     $("#note").addEventListener("input", function(e){
       today().note = e.target.value;
@@ -1276,6 +1358,7 @@
     $("#setStartWeight").value = db.settings.startWeight == null ? "" : db.settings.startWeight;
     $("#setTargetWeight").value = db.settings.targetWeight == null ? "" : db.settings.targetWeight;
     $("#setTargetDate").value = db.settings.targetDate || "";
+    $("#setWeighDay").value = String(weighDayIndex());
 
     var keys = Object.keys(db.days).filter(function(k){ return isChecked(db.days[k]); });
     $("#dataInfo").textContent = "已记录 " + keys.length + " 天 · " + weightSeries().length + " 条体重数据";
@@ -1290,6 +1373,9 @@
       db.settings.startWeight = isNaN(sw) ? null : sw;
       db.settings.targetWeight = isNaN(tw) ? null : tw;
       db.settings.targetDate = $("#setTargetDate").value || null;
+      var wd = parseInt($("#setWeighDay").value, 10);
+      db.settings.weighDay = isNaN(wd) ? 1 : wd;
+      weighBack = false;
       save();
       renderToday(); renderRecords(); renderSettings();
       toast("设置已保存");
